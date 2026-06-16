@@ -11,9 +11,9 @@ from rich import box
 from src import __version__
 
 THEME = Theme({
-    "primary":   "bold #00d4aa",
-    "secondary": "#0066ff",
-    "accent":    "#ff6b35",
+    "primary":   "bold #ff6b00",
+    "secondary": "#ff8c00",
+    "accent":    "#ffaa33",
     "muted":     "#555555",
     "success":   "#00c853",
     "warning":   "#ffab00",
@@ -42,58 +42,82 @@ BANNER = """\
 
 def print_banner():
     console.print()
-    console.print(Text(BANNER, style="bold #00d4aa"))
+    console.print(Text(BANNER, style="bold #ff6b00"))
     console.print()
     console.print(
-        f"  [#555555]FinGPT Terminal[/]  [dim]•[/]  [#555555]v{__version__}[/]  "
-        f"[dim]•[/]  [#555555]Type [/][white]menu[/][#555555] to explore or [/][white]help[/][#555555] for commands[/]"
+        f"  [#555555]v{__version__}[/]  [dim]•[/]  "
+        f"[#555555]Type [/][white]help[/][#555555] to see all commands  [/]"
+        f"[dim]•[/]  [#555555]Type [/][white]/ask <question>[/][#555555] to talk to the AI[/]"
     )
     console.print()
 
 
 def print_home():
     table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2), show_edge=False)
-    table.add_column(style="bold #00d4aa", width=14)
+    table.add_column(style="bold #ff6b00", width=14)
+    table.add_column(style="#e8e8e8",      width=24)
     table.add_column(style="#555555")
-    for cmd, desc in [
-        ("stocks",    "Equities — prices, fundamentals, technicals, screener"),
-        ("crypto",    "Cryptocurrency — prices, on-chain, DeFi"),
-        ("macro",     "Macroeconomics — rates, inflation, GDP, central banks"),
-        ("forex",     "Foreign exchange — pairs, rates, carry"),
-        ("etf",       "ETFs — flows, holdings, performance"),
-        ("news",      "News and sentiment across all asset classes"),
-        ("portfolio", "Portfolio tracking, P&L, risk metrics"),
-        ("ai",        "AI analyst — ask questions, get analysis"),
+    for cmd, label, desc in [
+        ("stocks",    "Stocks & Equities",  "prices, fundamentals, charts, news"),
+        ("crypto",    "Cryptocurrency",     "prices, on-chain data, DeFi"),
+        ("macro",     "Macro & Economy",    "interest rates, inflation, yield curve"),
+        ("forex",     "Foreign Exchange",   "currency pairs and rates"),
+        ("etf",       "ETFs & Funds",       "holdings, flows, performance"),
+        ("news",      "News & Sentiment",   "headlines across all markets"),
+        ("portfolio", "My Portfolio",       "track positions, P&L, allocation"),
     ]:
-        table.add_row(cmd, desc)
-    console.print(Panel(table, title="[bold #00d4aa] FinGPT Terminal [/]",
-                        border_style="#0066ff", box=box.ROUNDED, padding=(1, 1)))
+        table.add_row(cmd, label, desc)
+
+    console.print()
+    console.print(Panel(table, title="[bold #ff6b00] FinGPT Terminal [/]",
+                        border_style="#ff6b00", box=box.ROUNDED, padding=(1, 2)))
+    console.print(
+        "  [#555555]Type a section name to enter it  [dim]•[/]  "
+        "[white]/ask <question>[/][#555555] to ask the AI  [dim]•[/]  "
+        "[white]help[/][#555555] for all commands[/]\n"
+    )
 
 
-def print_menu(title: str, items: list[tuple[str, str]]):
+def print_menu(title: str, items: list[tuple[str, str, str]], tip: str = ""):
     table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2), show_edge=False)
-    table.add_column(style="bold #00d4aa", width=18)
+    table.add_column(style="bold #ff6b00", width=16)
+    table.add_column(style="#e8e8e8",      width=26)
     table.add_column(style="#555555")
-    for cmd, desc in items:
-        table.add_row(cmd, desc)
-    console.print(Panel(table, title=f"[bold #00d4aa] {title} [/]",
-                        border_style="#0066ff", box=box.ROUNDED, padding=(1, 1)))
+    for cmd, label, desc in items:
+        table.add_row(cmd, label, desc)
+
+    if tip:
+        from rich.console import Group
+        body = Group(table, Text(f"\n  {tip}", style="#555555"))
+    else:
+        body = table
+
+    console.print()
+    console.print(Panel(body, title=f"[bold #ff6b00] {title} [/]",
+                        border_style="#ff6b00", box=box.ROUNDED, padding=(1, 2)))
+    console.print(
+        "  [#555555][white]..[/] to go back  [dim]•[/]  "
+        "[white]home[/] to return to main menu  [dim]•[/]  "
+        "[white]/ask <question>[/] to ask the AI[/]\n"
+    )
 
 
-def print_panel(content, title: str = "", border: str = "#0066ff"):
-    console.print(Panel(content, title=f"[bold #00d4aa] {title} [/]" if title else "",
+def print_panel(content, title: str = "", border: str = "#ff6b00"):
+    console.print(Panel(content, title=f"[bold #ff6b00] {title} [/]" if title else "",
                         border_style=border, box=box.ROUNDED, padding=(1, 2)))
 
 
 def print_table(title: str, columns: list[str], rows: list[list]):
-    table = Table(title=f" {title} ", box=box.SIMPLE_HEAD, border_style="#0066ff",
-                  header_style="bold #00d4aa", title_style="bold #00d4aa",
-                  show_lines=False, padding=(0, 1))
+    table = Table(title=f" {title} ", box=box.SIMPLE_HEAD, border_style="#ff6b00",
+                  header_style="bold #ff6b00", title_style="bold #ff6b00",
+                  show_lines=False, padding=(0, 2))
     for col in columns:
         table.add_column(col, style="#e8e8e8")
     for row in rows:
         table.add_row(*[str(c) for c in row])
+    console.print()
     console.print(table)
+    console.print()
 
 
 def print_rule(label: str = ""):
@@ -101,7 +125,7 @@ def print_rule(label: str = ""):
 
 
 def print_error(message: str):
-    console.print(f"\n  [bold #ff1744]error[/]  [#555555]{message}[/]\n")
+    console.print(f"\n  [bold #ff1744]✗[/]  [#e8e8e8]{message}[/]\n")
 
 
 def print_success(message: str):

@@ -1,4 +1,4 @@
-"""Context — tracks the user's current position in the menu tree."""
+"""Context — tracks navigation state and loaded instruments."""
 
 from dataclasses import dataclass, field
 from typing import Optional
@@ -6,9 +6,8 @@ from typing import Optional
 
 @dataclass
 class Context:
-    path: list[str]            = field(default_factory=list)
-    ai_mode: bool              = False
-    _ai_return_path: list[str] = field(default_factory=list)
+    path: list[str]      = field(default_factory=list)
+    _ticker: str | None  = None
 
     def enter(self, name: str):
         self.path.append(name)
@@ -18,22 +17,24 @@ class Context:
             self.path.pop()
 
     def home(self):
-        self.path    = []
-        self.ai_mode = False
+        self.path = []
 
-    def enter_ai(self):
-        self._ai_return_path = list(self.path)
-        self.ai_mode         = True
+    def set_ticker(self, ticker: str):
+        self._ticker = ticker.upper().strip()
 
-    def exit_ai(self):
-        self.path    = list(self._ai_return_path)
-        self.ai_mode = False
+    def get_ticker(self) -> str | None:
+        return self._ticker
+
+    def clear_ticker(self):
+        self._ticker = None
 
     @property
     def prompt_path(self) -> str:
-        if self.ai_mode:
-            return "ai"
         return "/".join(self.path) if self.path else ""
+
+    @property
+    def prompt_ticker(self) -> str | None:
+        return self._ticker
 
     @property
     def current(self) -> Optional[str]:
@@ -42,9 +43,6 @@ class Context:
     @property
     def depth(self) -> int:
         return len(self.path)
-
-    def __repr__(self):
-        return f"Context(path={self.path}, ai_mode={self.ai_mode})"
 
 
 ctx = Context()

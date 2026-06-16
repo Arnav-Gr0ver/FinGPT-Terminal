@@ -1,6 +1,7 @@
 """FinGPT Terminal — main entry point."""
 
 import sys
+from pathlib import Path
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
@@ -13,18 +14,24 @@ from src.context import ctx
 from src.router import route, TOP_LEVEL, GLOBAL_COMMANDS
 from src.menus import MENU_TREE
 
-HISTORY_FILE = ".fingpt_history"
-console      = Console()
+# Store history alongside config and portfolio in ~/.fingpt/
+_history_dir = Path.home() / ".fingpt"
+_history_dir.mkdir(parents=True, exist_ok=True)
+HISTORY_FILE = str(_history_dir / "history")
+
+console = Console()
 
 PROMPT_STYLE = Style.from_dict({
     "prompt.bracket": "#555555",
-    "prompt.app":     "bold #00d4aa",
-    "prompt.path":    "#0066ff",
+    "prompt.app":     "bold #ff6b00",
+    "prompt.path":    "#ff8c00",
+    "prompt.ticker":  "bold #e8e8e8",
     "prompt.arrow":   "#555555",
 })
 
 
 def _build_completer() -> WordCompleter:
+    """Build tab completer from all known commands."""
     words = set(TOP_LEVEL) | set(GLOBAL_COMMANDS.keys())
     for section, tree in MENU_TREE.items():
         for sub in tree.get("submenus", {}).keys():
@@ -39,25 +46,39 @@ def _build_completer() -> WordCompleter:
 
 
 def _prompt_message():
-    path = ctx.prompt_path
-    if path:
-        return [
-            ("class:prompt.bracket", "("),
-            ("class:prompt.app",     "FinGPT Terminal"),
-            ("class:prompt.bracket", ") ["),
-            ("class:prompt.path",    path),
-            ("class:prompt.bracket", "]"),
-            ("class:prompt.arrow",   " > "),
-        ]
-    return [
+    """
+    Build the dynamic prompt.
+
+    Examples:
+      (FinGPT Terminal) >
+      (FinGPT Terminal) [stocks] >
+      (FinGPT Terminal) [stocks/fa: AAPL] >
+    """
+    path   = ctx.prompt_path
+    ticker = ctx.prompt_ticker
+
+    parts = [
         ("class:prompt.bracket", "("),
         ("class:prompt.app",     "FinGPT Terminal"),
         ("class:prompt.bracket", ")"),
-        ("class:prompt.arrow",   " > "),
     ]
+
+    if path or ticker:
+        parts.append(("class:prompt.bracket", " ["))
+        if path:
+            parts.append(("class:prompt.path", path))
+        if path and ticker:
+            parts.append(("class:prompt.bracket", ": "))
+        if ticker:
+            parts.append(("class:prompt.ticker", ticker))
+        parts.append(("class:prompt.bracket", "]"))
+
+    parts.append(("class:prompt.arrow", " > "))
+    return parts
 
 
 def main():
+    """Boot and run the FinGPT Terminal."""
     print_banner()
     print_home()
 
@@ -75,15 +96,19 @@ def main():
             if not raw:
                 continue
             route(raw)
+
         except SystemExit:
-            console.print("\n  [bold #00d4aa]FinGPT Terminal — Goodbye.[/]\n")
+            console.print("\n  [bold #ff6b00]FinGPT Terminal — Goodbye.[/]\n")
             sys.exit(0)
+
         except KeyboardInterrupt:
-            console.print("\n  [#555555]Use 'exit' or Ctrl+D to quit.[/]")
+            console.print("\n  [#555555]Type 'exit' or press Ctrl+D to quit.[/]")
             continue
+
         except EOFError:
-            console.print("\n  [bold #00d4aa]FinGPT Terminal — Goodbye.[/]\n")
+            console.print("\n  [bold #ff6b00]FinGPT Terminal — Goodbye.[/]\n")
             sys.exit(0)
+
         except Exception as e:
             print_error(str(e))
             continue
