@@ -6,7 +6,7 @@ from pydantic.dataclasses import dataclass
 # pylint: disable=too-many-instance-attributes, disable=no-member
 
 
-@dataclass
+@dataclass(config=dict(frozen=True))
 class BaseModel:
     def __repr__(self) -> str:
         """Return string representation of model."""

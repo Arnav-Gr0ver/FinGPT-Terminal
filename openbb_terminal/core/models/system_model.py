@@ -9,7 +9,7 @@ from openbb_terminal.core.models import BaseModel
 # pylint: disable=too-many-instance-attributes
 
 
-@dataclass(config=dict(validate_assignment=True, frozen=True))
+@dataclass(config=dict(validate_assignment=True))
 class SystemModel(BaseModel):
     """
     Data model for system variables and configurations.

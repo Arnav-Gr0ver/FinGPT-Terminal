@@ -10,7 +10,7 @@ from openbb_terminal.core.models import BaseModel
 # pylint: disable=too-many-instance-attributes, disable=no-member, useless-parent-delegation
 
 
-@dataclass(config=dict(validate_assignment=True, frozen=True))
+@dataclass(config=dict(validate_assignment=True))
 class PreferencesModel(BaseModel):
     """Data model for preferences."""
 

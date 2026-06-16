@@ -25,5 +25,5 @@ dc = make_dataclass(
 )
 dc.__repr__ = dc.__base__.__repr__  # type: ignore
 CredentialsModel = pydanticdataclass(
-    dc, config=dict(validate_assignment=True, frozen=True)
+    dc, config=dict(validate_assignment=True)
 )

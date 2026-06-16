@@ -7,7 +7,7 @@ from openbb_terminal.core.models.profile_model import ProfileModel
 from openbb_terminal.core.models.sources_model import SourcesModel
 
 
-@dataclass(config=dict(validate_assignment=True, frozen=True))
+@dataclass(config=dict(validate_assignment=True))
 class UserModel(BaseModel):
     """Data model for user."""
 

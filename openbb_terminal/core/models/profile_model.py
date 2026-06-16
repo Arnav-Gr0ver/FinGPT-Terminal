@@ -5,7 +5,7 @@ from pydantic.dataclasses import dataclass
 from openbb_terminal.core.models import BaseModel
 
 
-@dataclass(config=dict(validate_assignment=True, frozen=True))
+@dataclass(config=dict(validate_assignment=True))
 class ProfileModel(BaseModel):
     """Data model for profile."""
 
