@@ -1,140 +1,186 @@
-"""Router — dispatches input based on current navigation context."""
+"""Router — the grammar engine.
+
+One rule: subject, then verbs. The router loads a subject (an equity ticker, a
+crypto symbol, or a FRED macro series) and runs a chain of verbs against it.
+Verbs compose left to right against the loaded subject:
+
+    NVDA                         load a subject
+    price                        one verb
+    price compare AMD chart 1y   a chain — compare injects a peer downstream
+
+`ask` is the one paid verb; everything else is free.
+"""
+
+import shlex
 
 from src.context import ctx
-from src.display import print_error, print_home, console
+from src.display import print_error, print_help, console
+from src import verbs
 
-GLOBAL_COMMANDS = {
-    "home":  "Return to the main menu",
-    "menu":  "Show the current menu",
-    "..":    "Go up one level",
-    "back":  "Go up one level",
-    "login": "Set your FinGPT Terminal API key",
-    "help":  "Show available global commands",
-    "clear": "Clear the screen",
-    "exit":  "Quit FinGPT Terminal",
-    "quit":  "Quit FinGPT Terminal",
+# Verb name → renderer. chart / compare / ai are special-cased (they take args).
+ZERO_ARG = {
+    "price":      verbs.v_price,
+    "financials": verbs.v_financials,
+    "earnings":   verbs.v_earnings,
+    "filings":    verbs.v_filings,
+    "news":       verbs.v_news,
+    "calendar":   verbs.v_calendar,
+    "profile":    verbs.v_profile,
+    "dividends":  verbs.v_dividends,
+    "holders":    verbs.v_holders,
+    "analysts":   verbs.v_analysts,
+    "insiders":   verbs.v_insiders,
+    "watch":      verbs.v_watch,
 }
-
-TOP_LEVEL = {"stocks", "crypto", "macro", "forex", "etf", "news", "portfolio", "ai"}
+# chart / compare / ask / screen take arguments and are handled specially.
+VERBS = set(ZERO_ARG) | {"chart", "compare", "ask", "screen"}
 
 
 def route(raw: str):
-    parts = raw.strip().split(maxsplit=1)
-    cmd   = parts[0].lower()
-    args  = parts[1] if len(parts) > 1 else ""
+    raw = raw.strip()
+    if not raw:
+        return
 
-    if cmd in ("exit", "quit"):
+    low = raw.lower()
+    if low in ("exit", "quit", "q"):
         raise SystemExit(0)
-
-    if cmd == "clear":
+    if low == "clear":
         console.clear()
         return
-
-    if cmd == "home":
-        ctx.home()
-        print_home()
+    if low in ("help", "h", "?"):
+        print_help()
         return
-
-    if cmd in ("..", "back"):
-        if ctx.ai_mode:
-            ctx.exit_ai()
-        elif ctx.depth > 0:
-            ctx.back()
-        _show_current_menu()
-        return
-
-    if cmd == "menu":
-        _show_current_menu()
-        return
-
-    if cmd == "help":
-        _print_help()
-        return
-
-    if cmd == "login":
+    if low == "login":
         from src.auth import run_login
         run_login()
         return
 
-    if cmd == "ai" and not ctx.ai_mode:
-        ctx.enter_ai()
-        from src.agent import print_ai_welcome
-        print_ai_welcome()
-        return
+    try:
+        tokens = shlex.split(raw)
+    except ValueError:
+        tokens = raw.split()
 
-    if ctx.ai_mode:
-        if cmd in ("exit", "back"):
-            ctx.exit_ai()
-            _show_current_menu()
+    steps = _parse(tokens)
+    if steps is None:
+        return
+    _execute(steps)
+
+
+# ── parse: tokens → ordered (verb, arg) steps ────────────────────────────────
+
+def _parse(tokens: list[str]):
+    steps = []
+    i = 0
+    # A leading non-verb token is a subject to load (or switch to).
+    while i < len(tokens):
+        tok = tokens[i]
+        low = tok.lower()
+
+        if low not in VERBS:
+            # The leading token is always a subject to load (ticker, macro, or a
+            # company/asset name). Mid-chain, only a ticker/macro shape switches
+            # subjects — a stray word there is an error, not a name lookup.
+            if i == 0 or verbs.is_subject_token(tok):
+                steps.append(("__load", tok))
+                i += 1
+                continue
+            from rich.markup import escape
+            hint = "type a ticker (NVDA), a macro series (CPI), or a verb."
+            print_error(f"Don't recognize '{escape(tok)}' — {hint}")
+            return None
+
+        i += 1
+        if low == "chart":
+            rng = None
+            if i < len(tokens) and verbs.normalize_range(tokens[i]):
+                rng = tokens[i]
+                i += 1
+            steps.append(("chart", rng))
+        elif low == "compare":
+            peers = []
+            while i < len(tokens) and tokens[i].lower() not in VERBS:
+                peers.append(tokens[i])
+                i += 1
+            steps.append(("compare", peers))
+        elif low == "screen":
+            sname = None
+            if i < len(tokens) and tokens[i].lower() not in VERBS:
+                sname = tokens[i]
+                i += 1
+            steps.append(("screen", sname))
+        elif low == "ask":
+            # Optional leading count controls how much session history Fin-R1
+            # sees: `ask 5 "..."` = last 5 outputs, `ask all "..."` = everything,
+            # bare `ask "..."` = the most recent output only.
+            hist = "1"
+            if i < len(tokens) and (tokens[i].isdigit() or tokens[i].lower() == "all"):
+                hist = tokens[i].lower()
+                i += 1
+            question = " ".join(tokens[i:])
+            i = len(tokens)
+            steps.append(("ask", (hist, question)))
+        else:
+            steps.append((low, None))
+    return steps
+
+
+# ── execute: run the chain, mutating the active subject set ───────────────────
+
+def _execute(steps):
+    active = [ctx.subject] if ctx.loaded else []
+    prev_verb = None
+
+    for name, arg in steps:
+        if name == "__load":
+            subj = verbs.load_subject(arg)
+            if subj is None:
+                return
+            active = [subj]
+            prev_verb = None
+            continue
+
+        # `screen` finds subjects rather than acting on one — no load needed.
+        if name == "screen":
+            verbs.v_screen(arg)
+            prev_verb = name
+            continue
+        # `watch` also works with nothing loaded (bare = list).
+        if not active and name != "watch":
+            print_error("Load a subject first — type a ticker like [white]NVDA[/] "
+                        "or a series like [white]CPI[/].")
             return
-        from src.agent import chat
-        chat(raw)
+
+        if name == "compare":
+            peers = [verbs.peer_subject(p) for p in arg]
+            peers = [p for p in peers if p]
+            if not peers:
+                print_error("compare needs a peer — e.g. [white]compare AMD[/].")
+                return
+            active = active + peers
+            verbs.v_compare(active)
+        elif name == "chart":
+            verbs.v_chart(active, arg, prev_verb)
+        elif name == "ask":
+            _ask(arg, active)
+        else:
+            ZERO_ARG[name](active)
+
+        prev_verb = name
+
+
+def _ask(arg, active):
+    """The `ask` verb (the ai layer, Fin-R1). Reasons over the data already shown
+    this session — the user picks how much via the count: `ask`, `ask 5 …`,
+    `ask all …`."""
+    hist, question = arg
+    if not question:
+        print_error('ask needs a question — e.g. ask "is the margin dip structural?"\n'
+                    '  Add session context: ask 5 "…" (last 5) or ask all "…".')
         return
-
-    if ctx.depth == 0:
-        _route_home(cmd, args)
-    elif ctx.depth == 1:
-        _route_section(ctx.current, cmd, args)
-    else:
-        _route_deep(ctx.path, cmd, args)
-
-
-def _route_home(cmd: str, args: str):
-    if cmd in TOP_LEVEL:
-        ctx.enter(cmd)
-        _show_current_menu()
-    else:
-        print_error(f"Unknown command '{cmd}'. Type 'menu' to see options.")
-
-
-def _route_section(section: str, cmd: str, args: str):
-    from src.menus import MENU_TREE, run_command
-    tree = MENU_TREE.get(section, {})
-    if cmd in tree.get("submenus", {}):
-        ctx.enter(cmd)
-        _show_current_menu()
-        return
-    if cmd in tree.get("commands", {}):
-        run_command(section, cmd, args)
-        return
-    print_error(f"Unknown command '{cmd}' in {section}. Type 'menu' to see options.")
-
-
-def _route_deep(path: list, cmd: str, args: str):
-    from src.menus import MENU_TREE, run_command
-    section = path[0]
-    subsect = path[1]
-    subtree = MENU_TREE.get(section, {}).get("submenus", {}).get(subsect, {})
-    if cmd in subtree.get("commands", {}):
-        run_command(f"{section}/{subsect}", cmd, args)
-        return
-    print_error(f"Unknown command '{cmd}'. Type 'menu' to see options.")
-
-
-def _show_current_menu():
-    if ctx.ai_mode:
-        return
-    if ctx.depth == 0:
-        print_home()
-        return
-    from src.menus import MENU_TREE
-    from src.display import print_menu
-    section = ctx.path[0]
-    tree    = MENU_TREE.get(section, {})
-    if ctx.depth == 1:
-        items = []
-        for name, meta in tree.get("submenus", {}).items():
-            items.append((name, meta.get("desc", "") if isinstance(meta, dict) else meta))
-        for name, desc in tree.get("commands", {}).items():
-            items.append((name, desc))
-        print_menu(f"FinGPT Terminal  ›  {section.upper()}", items)
-    elif ctx.depth == 2:
-        subsect = ctx.path[1]
-        subtree = tree.get("submenus", {}).get(subsect, {})
-        items   = list(subtree.get("commands", {}).items())
-        print_menu(f"FinGPT Terminal  ›  {section.upper()}  ›  {subsect.upper()}", items)
-
-
-def _print_help():
-    from src.display import print_menu
-    print_menu("FinGPT Terminal  —  Global Commands", list(GLOBAL_COMMANDS.items()))
+    # Make sure the agent shares the active primary subject.
+    if active:
+        ctx.set_subject(active[0])
+    context_block = ctx.history_context(hist)
+    query = (context_block + "\n\nQUESTION: " + question) if context_block else question
+    from src.agent import run_agent
+    run_agent(query, ctx, deep=False)

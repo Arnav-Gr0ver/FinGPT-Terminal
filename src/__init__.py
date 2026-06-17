@@ -1,5 +1,3 @@
-"""FinGPT Terminal — AI-powered financial terminal."""
+"""FinGPT Terminal — AI-powered financial research terminal."""
 
 __version__ = "0.1.0"
-__author__   = "FinGPT"
-__app__      = "FinGPT Terminal"

@@ -5,17 +5,19 @@ build-backend = "setuptools.backends.legacy:build"
 [project]
 name            = "fingpt-terminal"
 version         = "0.1.0"
-description     = "AI-powered financial terminal"
+description     = "A financial terminal driven by one grammar: subject, then verbs"
 readme          = "README.md"
 requires-python = ">=3.10"
 license         = { text = "MIT" }
-keywords        = ["finance", "terminal", "ai", "stocks", "crypto"]
+keywords        = ["finance", "terminal", "ai", "stocks", "crypto", "research", "alpha"]
 
 dependencies = [
     "rich>=13.0.0",
     "prompt_toolkit>=3.0.0",
     "yfinance>=0.2.0",
     "requests>=2.31.0",
+    "lxml>=4.9.0",
+    "pandas>=2.0.0",
 ]
 
 [project.scripts]
