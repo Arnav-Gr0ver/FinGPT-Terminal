@@ -1,16 +1,21 @@
 """fin — a financial terminal driven by one grammar: subject, then verbs."""
 
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.styles import Style
+from prompt_toolkit.application import get_app
+from prompt_toolkit.key_binding import KeyBindings
 from rich.console import Console
 
 from src.display import print_banner, print_error
 from src.context import ctx
 from src.router import route
+from src.completion import GrammarCompleter, toolbar_fragments
+from src.data import symbol_index
 
 # Nothing is persisted across sessions. Command history lives in memory only
 # (up-arrow works this session, then it's gone). Remove any history file an
@@ -29,14 +34,50 @@ PROMPT_STYLE = Style.from_dict({
     "prompt.app":     "bold #e05c4b",
     "prompt.subject": "bold #e8e8e8",
     "prompt.arrow":   "#555555",
+    "bottom-toolbar": "bg:#262626",
+    "tb.pad":    "bg:#262626",
+    "tb.loaded": "bold #141414 bg:#9aa0a6",
+    "tb.key":    "bold #141414 bg:#e05c4b",
+    "tb.eg":     "#cfcfcf bg:#262626",
+    # Completion menu — high-contrast, no hard-to-read blue.
+    "completion-menu":                       "bg:#1c1c1c",
+    "completion-menu.completion":            "bg:#1c1c1c #d0d0d0",
+    "completion-menu.completion.current":    "bg:#e05c4b #141414",
+    "completion-menu.meta.completion":         "bg:#1c1c1c #6f6f6f",
+    "completion-menu.meta.completion.current": "bg:#c0463a #141414",
+    "scrollbar.background": "bg:#303030",
+    "scrollbar.button":     "bg:#666666",
 })
+
+
+_kb = KeyBindings()
+
+
+@_kb.add("enter")
+def _(event):
+    """Enter fills in a highlighted completion (arrow/Tab-selected) instead of
+    submitting; with nothing highlighted, it runs the line as usual."""
+    buff = event.current_buffer
+    state = buff.complete_state
+    if state is not None and state.current_completion is not None:
+        buff.apply_completion(state.current_completion)
+    else:
+        buff.validate_and_handle()
+
+
+def _toolbar():
+    try:
+        text = get_app().current_buffer.document.text_before_cursor
+    except Exception:
+        text = ""
+    return toolbar_fragments(text)
 
 
 def _prompt_message():
     parts = [
         ("class:prompt.time",    datetime.now().strftime("%H:%M:%S") + " "),
         ("class:prompt.bracket", "<"),
-        ("class:prompt.app",     "FinGPT Terminal"),
+        ("class:prompt.app",     "FinR1 Terminal"),
     ]
     if ctx.prompt_label:
         parts.append(("class:prompt.subject", f" {ctx.prompt_label}"))
@@ -47,10 +88,17 @@ def _prompt_message():
 
 def main():
     print_banner()
-    # No tab-completion or ghost-text hinting — the grammar is small enough to
-    # type. History is in-memory only (up-arrow within this session, never saved).
+    # Build the symbol index in the background so completion is ready quickly
+    # without blocking startup.
+    threading.Thread(target=symbol_index.ensure_index, daemon=True).start()
+    # Grammar-aware completion: as you type, it suggests the right token type
+    # (subject / verb / range / screen). History is in-memory only.
     session = PromptSession(
         history=InMemoryHistory(),
+        completer=GrammarCompleter(),
+        complete_while_typing=True,
+        key_bindings=_kb,
+        bottom_toolbar=_toolbar,
         style=PROMPT_STYLE,
     )
     while True:

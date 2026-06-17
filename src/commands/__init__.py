@@ -1,1 +1,1 @@
-"""FinGPT Terminal command handlers."""
+"""FinR1 Terminal command handlers."""

@@ -151,8 +151,8 @@ def _chat(endpoint: str, key: str, messages: list):
     """One non-streaming OpenAI-compatible chat completion.
 
     Returns (text, usage_dict) or (None, None) on error (already reported). The
-    payload is standard `/v1/chat/completions` so it works against vLLM, the
-    Fin-R1 Modal deployment, or any OpenAI-style server unchanged.
+    payload is standard `/v1/chat/completions` so it works against any
+    OpenAI-compatible server hosting Fin-R1 (e.g. a vLLM server) unchanged.
     """
     headers = {"Content-Type": "application/json"}
     if key:
@@ -348,3 +348,4 @@ def _require_endpoint() -> str:
             "  The endpoint should accept OpenAI-style chat-completion POSTs."
         )
     return endpoint
+

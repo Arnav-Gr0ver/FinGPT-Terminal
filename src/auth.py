@@ -1,4 +1,4 @@
-"""Auth — API key and endpoint management for the FinGPT Terminal AI layer."""
+"""Auth — API key and endpoint management for the FinR1 Terminal AI layer."""
 
 import os
 import json
@@ -47,7 +47,7 @@ def save_endpoint(url: str):
 
 def run_login():
     console.print()
-    console.print(f"  [bold #e05c4b]FinGPT Terminal — Login[/]")
+    console.print(f"  [bold #e05c4b]FinR1 Terminal — Login[/]")
     console.print("  [#555555]Get your API key at [/][white]fingpt.ai/dashboard[/]\n")
     key = console.input("  [bold #e8e8e8]API Key → [/]").strip()
     if not key:

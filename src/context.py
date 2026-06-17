@@ -23,27 +23,37 @@ MODEL = {
 }
 
 _KIND_TAG = {"macro": "FRED", "crypto": "crypto", "index": "index",
-             "commodity": "commodity", "fx": "FX"}
+             "commodity": "commodity", "fx": "FX", "country": "country",
+             "etf": "ETF", "chain": "chain", "protocol": "protocol"}
+
+# Kinds that have price/chart history through a yfinance-style symbol.
+_PRICED = {"equity", "etf", "crypto", "index", "commodity", "fx"}
 
 
 @dataclass
 class Subject:
     """A loaded noun the verbs act on."""
     symbol: str                 # prompt label, e.g. "NVDA" or "CPI"
-    kind: str = "equity"        # equity | crypto | macro | index | commodity | fx
+    kind: str = "equity"        # equity|etf|crypto|macro|index|commodity|fx|country|chain
     name: str = ""              # "NVIDIA Corp" / "Consumer Price Index"
     exchange: str = ""          # "NASDAQ" (equities only)
     fred_id: str = ""           # FRED series id (macro only)
     yf: str = ""                # yfinance symbol (markets/crypto/fx)
+    ref: str = ""               # extra handle: country code, lat,lon, chain slug…
 
     def __post_init__(self):
-        if not self.yf and self.kind != "macro":
+        if not self.yf and self.kind in _PRICED:
             self.yf = self.symbol
 
     @property
     def is_company(self) -> bool:
-        """Has fundamentals (financials/earnings/filings/calendar apply)."""
+        """Has SEC/issuer fundamentals (financials/earnings/filings/etc.)."""
         return self.kind == "equity"
+
+    @property
+    def is_priced(self) -> bool:
+        """Has price/chart history."""
+        return self.kind in _PRICED
 
     def confirm_line(self) -> str:
         bits = [self.symbol, self.name]
@@ -73,7 +83,10 @@ class SessionStats:
 
 @dataclass
 class Context:
-    subject: Optional[Subject] = None
+    # The active subject SET. One subject is the common case; `vs`/`&`/`,`
+    # compose several (e.g. NVDA vs AMD), and set-aware verbs (compare, chart,
+    # corr, spread, returns) act on all of them.
+    subjects: list = field(default_factory=list)
     stats: "SessionStats" = field(default_factory=lambda: SessionStats())
     # In-memory transcript of what the terminal showed THIS session. Never
     # written to disk; gone when the process exits. `ask` can feed some or all
@@ -82,11 +95,23 @@ class Context:
     _MAX_ENTRIES = 80
     _MAX_CHARS   = 1600
 
+    @property
+    def subject(self) -> Optional[Subject]:
+        return self.subjects[0] if self.subjects else None
+
     # ── subject management ────────────────────────────────────────────────────
     def set_subject(self, subject: Subject):
         if not self.subject or self.subject.symbol != subject.symbol:
             self.stats.subjects_loaded += 1
-        self.subject = subject
+        self.subjects = [subject]
+
+    def set_subjects(self, subjects: list):
+        self.subjects = list(subjects)
+
+    def add_subject(self, subject: Subject):
+        if subject.symbol not in [s.symbol for s in self.subjects]:
+            self.stats.subjects_loaded += 1
+            self.subjects.append(subject)
 
     def record_usage(self, prompt_tokens: int, completion_tokens: int):
         self.stats.ai_calls += 1
@@ -131,30 +156,32 @@ class Context:
                 "(use it; cite it):\n\n" + "\n\n".join(blocks))
 
     def clear(self):
-        self.subject = None
+        self.subjects = []
 
     @property
     def loaded(self) -> bool:
-        return self.subject is not None
+        return bool(self.subjects)
 
     @property
     def prompt_label(self) -> Optional[str]:
-        return self.subject.symbol if self.subject else None
+        if not self.subjects:
+            return None
+        return "·".join(s.symbol for s in self.subjects)
 
     # ── backward-compatible helpers used by the AI agent ─────────────────────
     def set_ticker(self, ticker: str):
         sym = ticker.upper().strip()
         if not self.subject or self.subject.symbol != sym:
-            self.subject = Subject(symbol=sym, kind="equity")
+            self.subjects = [Subject(symbol=sym, kind="equity")]
 
     def get_ticker(self) -> Optional[str]:
         return self.subject.symbol if self.subject else None
 
     def summary(self) -> str:
-        if not self.subject:
+        if not self.subjects:
             return "no subject loaded"
-        s = self.subject
-        return f"loaded subject: {s.symbol} ({s.kind}) — {s.name or 'unknown'}"
+        return "loaded subjects: " + "; ".join(
+            f"{s.symbol} ({s.kind}) — {s.name or 'unknown'}" for s in self.subjects)
 
 
 ctx = Context()

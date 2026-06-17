@@ -478,14 +478,115 @@ def _wrap(text: str, width: int) -> str:
     return "\n  ".join(textwrap.wrap(text, width)[:6])
 
 
+def get_options(ticker: str) -> str:
+    """Nearest-expiry option chain summary: ATM strikes, IV, and put/call ratio."""
+    try:
+        t = yf.Ticker(ticker)
+        exps = t.options
+        if not exps:
+            return f"No options listed for {ticker.upper()}."
+        spot = t.fast_info.last_price
+        exp  = exps[0]
+        chain = t.option_chain(exp)
+        calls, puts = chain.calls, chain.puts
+
+        def near(df):
+            df = df.copy()
+            df["d"] = (df["strike"] - spot).abs()
+            return df.sort_values("d").head(5).sort_values("strike")
+
+        lines = [f"Options — {ticker.upper()}   (expiry {exp}, spot ${spot:,.2f})", ""]
+        lines.append(f"  {'Type':<5} {'Strike':>9} {'Last':>9} {'IV':>7} {'Vol':>8} {'OI':>9}")
+        lines.append("  " + "─" * 50)
+        for label, df in (("CALL", near(calls)), ("PUT", near(puts))):
+            for _, r in df.iterrows():
+                iv = f"{r['impliedVolatility']*100:.0f}%" if r.get("impliedVolatility") == r.get("impliedVolatility") else "—"
+                lines.append(f"  {label:<5} {r['strike']:>9.2f} {r['lastPrice']:>9.2f} {iv:>7} "
+                             f"{int(r.get('volume') or 0):>8,} {int(r.get('openInterest') or 0):>9,}")
+        pcr = (puts["openInterest"].sum() / calls["openInterest"].sum()
+               if calls["openInterest"].sum() else 0)
+        lines += ["", f"  Put/Call OI ratio: {pcr:.2f}   ({len(exps)} expiries listed)"]
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Could not fetch options for {ticker}: {e}"
+
+
+_SECTOR_ETFS = [
+    ("Technology", "XLK"), ("Financials", "XLF"), ("Health Care", "XLV"),
+    ("Cons. Disc.", "XLY"), ("Comm. Svcs", "XLC"), ("Industrials", "XLI"),
+    ("Cons. Staples", "XLP"), ("Energy", "XLE"), ("Utilities", "XLU"),
+    ("Materials", "XLB"), ("Real Estate", "XLRE"),
+]
+
+
+def get_sectors() -> str:
+    """US sector performance via SPDR sector ETFs (1-day and 1-month)."""
+    rows = []
+    for name, etf in _SECTOR_ETFS:
+        try:
+            t = yf.Ticker(etf)
+            fast = t.fast_info
+            price, prev = fast.last_price, fast.previous_close
+            day = (price - prev) / prev * 100 if prev else None
+            hist = t.history(period="1mo")["Close"].dropna()
+            mo = (hist.iloc[-1] / hist.iloc[0] - 1) * 100 if len(hist) > 1 else None
+            rows.append((name, etf, day, mo))
+        except Exception:
+            rows.append((name, etf, None, None))
+    rows.sort(key=lambda r: (r[2] if r[2] is not None else -99), reverse=True)
+    out = ["US Sector Performance   (SPDR sector ETFs)", "",
+           f"  {'Sector':<14} {'ETF':<6} {'1D':>8} {'1M':>8}", "  " + "─" * 38]
+    for name, etf, day, mo in rows:
+        d = f"{day:+.2f}%" if day is not None else "—"
+        m = f"{mo:+.1f}%" if mo is not None else "—"
+        out.append(f"  {name:<14} {etf:<6} {d:>8} {m:>8}")
+    return "\n".join(out)
+
+
 def get_chart_data(ticker: str, period: str = "1mo") -> list:
     try:
         df = yf.Ticker(ticker).history(period=period)
-        if df.empty:
-            return []
-        return df["Close"].dropna().tolist()
+        closes = df["Close"].dropna().tolist() if not df.empty else []
+        if closes:
+            return closes
+    except Exception:
+        pass
+    # Fallback: Stooq (US equities/ETFs).
+    try:
+        from src.data.stooq import get_closes
+        return get_closes(ticker)
     except Exception:
         return []
+
+
+def get_etf_holdings(ticker: str) -> str:
+    """Top holdings + sector weights for an ETF (yfinance funds data)."""
+    try:
+        fd = yf.Ticker(ticker).funds_data
+        lines = [f"Holdings — {ticker.upper()}", ""]
+        try:
+            top = fd.top_holdings
+            if top is not None and not top.empty:
+                lines += [f"  {'Symbol':<8} {'% Assets':>9}  Name", "  " + "─" * 50]
+                for sym, row in top.head(12).iterrows():
+                    pct  = row.get("Holding Percent")
+                    name = str(row.get("Name", ""))[:32]
+                    lines.append(f"  {str(sym):<8} {pct*100:>8.2f}%  {name}")
+        except Exception:
+            pass
+        try:
+            sw = fd.sector_weightings
+            if sw:
+                lines += ["", "  Sector weights", "  " + "─" * 30]
+                for sec, w in sorted(sw.items(), key=lambda x: -x[1])[:8]:
+                    lines.append(f"  {sec.replace('_', ' ').title():<22} {w*100:>5.1f}%")
+        except Exception:
+            pass
+        if len(lines) <= 2:
+            return f"No holdings data available for {ticker.upper()} (is it an ETF?)."
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Could not fetch holdings for {ticker}: {e}"
 
 
 def get_next_earnings(ticker: str) -> str | None:

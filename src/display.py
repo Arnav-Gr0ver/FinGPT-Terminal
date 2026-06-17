@@ -1,8 +1,8 @@
-"""Display layer — all Rich UI for FinGPT Terminal."""
+"""Display layer — all Rich UI for FinR1 Terminal."""
 
 from datetime import datetime
 
-from rich.console import Console
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -28,12 +28,12 @@ THEME = Theme({
 console = Console(theme=THEME)
 
 BANNER = """\
-  ███████╗██╗███╗   ██╗ ██████╗ ██████╗ ████████╗
-  ██╔════╝██║████╗  ██║██╔════╝ ██╔══██╗╚══██╔══╝
-  █████╗  ██║██╔██╗ ██║██║  ███╗██████╔╝   ██║
-  ██╔══╝  ██║██║╚██╗██║██║   ██║██╔═══╝    ██║
-  ██║     ██║██║ ╚████║╚██████╔╝██║        ██║
-  ╚═╝     ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝        ╚═╝
+  ███████╗██╗███╗   ██╗██████╗  ██╗
+  ██╔════╝██║████╗  ██║██╔══██╗███║
+  █████╗  ██║██╔██╗ ██║██████╔╝╚██║
+  ██╔══╝  ██║██║╚██╗██║██╔══██╗ ██║
+  ██║     ██║██║ ╚████║██║  ██║ ██║
+  ╚═╝     ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝ ╚═╝
   ████████╗███████╗██████╗ ███╗   ███╗██╗███╗   ██╗ █████╗ ██╗
      ██╔══╝██╔════╝██╔══██╗████╗ ████║██║████╗  ██║██╔══██╗██║
      ██║   █████╗  ██████╔╝██╔████╔██║██║██╔██╗ ██║███████║██║
@@ -44,29 +44,31 @@ BANNER = """\
 
 C = "#e05c4b"
 
-_HELP_ROWS = [
-    # (group, cmd, desc)
-    ("Subjects", "NVDA · apple",            "Equity ticker or company name"),
-    ("Subjects", "CPI · GDP · DGS10",       "FRED macro series"),
-    ("Subjects", "SPX · VIX · GOLD · OIL",  "Index, commodity & FX"),
-    ("Subjects", "BTC · ETH · EURUSD",      "Crypto & currency pairs"),
-    ("Verbs",    "price",                   "Quote, day's move, range"),
-    ("Verbs",    "chart <range>",           "5d 1mo 3mo 6mo ytd 1y 2y 5y 10y max"),
-    ("Verbs",    "financials",              "Revenue, margins, debt — trended"),
-    ("Verbs",    "earnings",                "Beat/miss history + next date"),
-    ("Verbs",    "profile",                 "Sector, industry, business summary"),
-    ("Verbs",    "dividends",               "Dividend history + yield"),
-    ("Verbs",    "holders · insiders",      "Ownership · SEC Form 4 trades"),
-    ("Verbs",    "analysts",                "Price targets + consensus"),
-    ("Verbs",    "filings",                 "Recent 10-K / 10-Q / 8-K"),
-    ("Verbs",    "news",                    "Latest headlines (openable links)"),
-    ("Verbs",    "calendar",                "Earnings, ex-div, splits ahead"),
-    ("Verbs",    "compare <peer> [peer]",   "Side-by-side, up to 4 subjects"),
-    ("Verbs",    "screen [name]",           "Find tickers — gainers, value, tech… (bare = list)"),
-    ("Verbs",    "watch",                   "Your watchlist; with a subject, add/remove it"),
-    ("Chaining", "price compare AMD chart 1y","Verbs compose left to right"),
-    ("ai",       "ask [N|all] \"<q>\"",      "Fin-R1 over session data (N outputs back)"),
-    ("System",   "help · clear · login · exit","Menu · clear · keys · quit"),
+# Each section: (group, [(command, description)])
+_TARGETS = [
+    ("NVDA · apple · SPY",        "equity · company name · ETF"),
+    ("CPI · GDP · DGS10",         "FRED macro series"),
+    ("SPX · VIX · GOLD · EURUSD · BTC", "index · commodity · FX · crypto"),
+    ("US · CHINA · country:BR",   "country — World Bank macro"),
+    ("ETHEREUM · chain:arbitrum", "crypto chain — DeFiLlama TVL"),
+    ("NVDA vs AMD vs INTC",       "combine with vs / & / ,  →  a target set"),
+]
+
+_FUNCTIONS = [
+    ("Price",    [("price · chart <range>",          "quote · price history"),
+                  ("returns · stats · seasonality",  "trailing returns · risk · monthly")]),
+    ("Compare",  [("compare · corr · spread",        "side-by-side · correlation · ratio")]),
+    ("Company",  [("financials · earnings · profile","SEC 10-K figures · beat-miss · summary"),
+                  ("dividends · holders · insiders",  "payouts · ownership · Form 4"),
+                  ("analysts · filings · calendar",   "targets · filings · catalysts"),
+                  ("short · options · sentiment",     "short interest · options+IV · news tone")]),
+    ("Macro",    [("gdp · inflation · trade · debt",  "country macro"),
+                  ("tvl · holdings · supply",         "chain TVL · ETF holdings · inventories")]),
+    ("Signals",  [("trends · risk",                   "Wikipedia attention · disruption")]),
+    ("Markets",  [("yields · sectors",                "Treasury curve · sector performance"),
+                  ("fear · dominance · coins",        "crypto F&G · dominance · top coins")]),
+    ("Find",     [("screen [name]",                   "gainers losers value tech… (bare = list)"),
+                  ("watch · hours · export · convert","watchlist · hours · session→md · FX")]),
 ]
 
 
@@ -76,37 +78,59 @@ def print_banner():
     console.print()
     console.print(
         f"  [#555555]v{__version__}[/]  [dim]•[/]  "
-        f"[#555555]Type [/][white]help[/][#555555] to see all commands[/]"
+        f"[#555555]Type [/][white]/help[/][#555555] to see all commands[/]"
     )
     console.print()
 
 
 def print_help():
-    table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2), show_edge=False)
-    table.add_column(style="#555555",    width=16)
-    table.add_column(style=f"bold {C}", width=28)
-    table.add_column(style="#e8e8e8")
+    # Grammar reminder.
+    header = Text.from_markup(
+        f"  [#777777]TARGET ▸ FUNCTIONS[/]   [#444444]·[/]   "
+        f"[white]NVDA price chart 1y[/]   [#444444]·[/]   "
+        f"[white]NVDA vs AMD compare[/]"
+    )
 
-    current_group = None
-    for group, cmd, desc in _HELP_ROWS:
-        if group != current_group:
-            if current_group is not None:
-                table.add_row("", "", "")
-            table.add_row(f"[bold #e8e8e8]{group}[/]", "", "")
-            current_group = group
-        table.add_row("", cmd, desc)
+    targets = Table(box=None, show_header=False, padding=(0, 2, 0, 0))
+    targets.add_column(style=f"bold {C}", no_wrap=True, width=10)
+    targets.add_column(style="bold #e8e8e8", no_wrap=True, width=34)
+    targets.add_column(style="#8a8a8a")
+    for i, (cmd, desc) in enumerate(_TARGETS):
+        targets.add_row("TARGETS" if i == 0 else "", cmd, desc)
 
+    funcs = Table(box=None, show_header=False, padding=(0, 2, 0, 0))
+    funcs.add_column(style=f"bold {C}", no_wrap=True, width=10)
+    funcs.add_column(style="bold #e8e8e8", no_wrap=True, width=34)
+    funcs.add_column(style="#8a8a8a")
+    for group, rows in _FUNCTIONS:
+        for i, (cmd, desc) in enumerate(rows):
+            funcs.add_row(group if i == 0 else "", cmd, desc)
+
+    ai = Table(box=None, show_header=False, padding=(0, 2, 0, 0))
+    ai.add_column(style=f"bold {C}", no_wrap=True, width=10)
+    ai.add_column(style="bold #e8e8e8", no_wrap=True, width=34)
+    ai.add_column(style="#8a8a8a")
+    ai.add_row("ai · paid", "/ask [N|all] \"<q>\"", "Fin-R1 reasons over the data on screen")
+    ai.add_row("system", "/help · /clear · /login · /exit", "slash commands")
+
+    body = Group(
+        header, Text(""),
+        targets, Text(""),
+        Rule(style="#333333"),
+        funcs, Text(""),
+        Rule(style="#333333"),
+        ai,
+    )
     console.print()
     console.print(Panel(
-        table,
-        title=f"[bold {C}] FinGPT Terminal — subject, then verbs [/]",
-        border_style=C,
-        box=box.ROUNDED,
-        padding=(1, 2),
+        body,
+        title=f"[bold {C}] FinR1 Terminal [/]",
+        subtitle="[#444444] load a TARGET · run FUNCTIONS [/]",
+        border_style=C, box=box.ROUNDED, padding=(1, 2),
     ))
     console.print(
-        f"  [#555555]Load a subject, then act on it. Type a new ticker anytime to "
-        f"switch. Names work too — [/][white]apple[/][#555555], [/][white]nvidia[/][#555555].[/]\n"
+        f"  [#555555]Functions run left-to-right against the loaded target(s); "
+        f"as you type, the bar below shows what comes next.[/]\n"
     )
 
 

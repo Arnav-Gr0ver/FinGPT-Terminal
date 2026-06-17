@@ -72,7 +72,29 @@ SPECIAL_SUBJECTS = {
     "EURUSD": ("EURUSD=X", "Euro / US Dollar",     "fx"),
     "GBPUSD": ("GBPUSD=X", "Pound / US Dollar",    "fx"),
     "USDJPY": ("USDJPY=X", "US Dollar / Yen",      "fx"),
+    "AUDUSD": ("AUDUSD=X", "Aussie / US Dollar",   "fx"),
+    "USDCAD": ("USDCAD=X", "US Dollar / Canada",   "fx"),
+    "USDCNY": ("USDCNY=X", "US Dollar / Yuan",     "fx"),
+    "USDCHF": ("USDCHF=X", "US Dollar / Franc",    "fx"),
     "DXY":    ("DX-Y.NYB", "US Dollar Index",      "fx"),
+    # More global indices
+    "FTSE":     ("^FTSE",  "FTSE 100 (UK)",        "index"),
+    "DAX":      ("^GDAXI", "DAX (Germany)",        "index"),
+    "CAC":      ("^FCHI",  "CAC 40 (France)",      "index"),
+    "NIKKEI":   ("^N225",  "Nikkei 225 (Japan)",   "index"),
+    "HANGSENG": ("^HSI",   "Hang Seng (HK)",       "index"),
+    "SENSEX":   ("^BSESN", "BSE Sensex (India)",   "index"),
+    "STOXX":    ("^STOXX50E", "Euro Stoxx 50",     "index"),
+    # More commodities
+    "WHEAT":    ("ZW=F",   "Wheat futures",        "commodity"),
+    "CORN":     ("ZC=F",   "Corn futures",         "commodity"),
+    "SOYBEAN":  ("ZS=F",   "Soybean futures",      "commodity"),
+    "COFFEE":   ("KC=F",   "Coffee futures",       "commodity"),
+    "SUGAR":    ("SB=F",   "Sugar futures",        "commodity"),
+    "COTTON":   ("CT=F",   "Cotton futures",       "commodity"),
+    "PLATINUM": ("PL=F",   "Platinum futures",     "commodity"),
+    "PALLADIUM":("PA=F",   "Palladium futures",    "commodity"),
+    "URANIUM":  ("URA",    "Uranium (URA ETF)",    "commodity"),
 }
 
 
@@ -82,74 +104,53 @@ def normalize_range(token: str) -> str | None:
 
 # ── subject loading ───────────────────────────────────────────────────────────
 
+_PREFIXES = {"chain", "country", "fred"}
+
+
 def is_subject_token(token: str) -> bool:
     """True if `token` could name a subject (not a bare verb)."""
     from src.data.macro import MACRO_SERIES
     from src.data.symbols import looks_like_ticker
+    from src.data.worldbank import COUNTRIES
+    from src.data.defillama import CHAINS
+    if ":" in token and token.split(":", 1)[0].lower() in _PREFIXES:
+        return True
     up = token.upper()
-    if up in MACRO_SERIES or up in SPECIAL_SUBJECTS:
+    if up in MACRO_SERIES or up in SPECIAL_SUBJECTS or up in COUNTRIES or up in CHAINS:
         return True
     return looks_like_ticker(token)
 
 
-def load_subject(token: str) -> Subject | None:
-    """Resolve and load a subject, printing the one-line confirmation."""
+def resolve_subject(token: str) -> Subject | None:
+    """Resolve any token to a Subject (no printing, no ctx mutation)."""
     token = token.strip()
     if not token:
         return None
     up = token.upper()
+
+    # Namespaced subjects: chain:… country:… fred:…
+    if ":" in token and token.split(":", 1)[0].lower() in _PREFIXES:
+        pre, val = token.split(":", 1)
+        pre = pre.lower()
+        if pre == "chain":
+            from src.data.defillama import resolve_chain
+            c = resolve_chain(token)
+            if c:
+                return Subject(symbol=c[1], kind="chain", name=c[1], ref=c[0])
+        if pre == "country":
+            from src.data.worldbank import resolve_country
+            c = resolve_country(val) or (val.upper()[:2], val.title())
+            return Subject(symbol=c[1], kind="country", name=c[1], ref=c[0])
+        if pre == "fred":
+            from src.data.macro import resolve_macro
+            m = resolve_macro(val)
+            if m:
+                return Subject(symbol=val.upper(), kind="macro", name=m[1], fred_id=m[0])
 
     from src.data.macro import MACRO_SERIES, resolve_macro
     from src.data.symbols import looks_like_ticker
-
-    # Macro series (FRED).
-    macro = None
-    if up in MACRO_SERIES:
-        macro = MACRO_SERIES[up]
-    elif up not in SPECIAL_SUBJECTS and not looks_like_ticker(token) and token.isupper():
-        macro = resolve_macro(token)
-    if macro:
-        fred_id, name, _unit = macro
-        subj = Subject(symbol=up, kind="macro", name=name, fred_id=fred_id)
-        return _finish(subj)
-
-    # Index / commodity / FX alias.
-    if up in SPECIAL_SUBJECTS:
-        yf_sym, name, kind = SPECIAL_SUBJECTS[up]
-        return _finish(Subject(symbol=up, kind=kind, name=name, yf=yf_sym))
-
-    # Equity or crypto.
-    from src.data.symbols import resolve_symbol
-    from src.data.crypto import is_crypto
-    with _loading(f"loading {token.upper()}"):
-        sym = (resolve_symbol(token) or up).strip()
-        if is_crypto(sym):
-            subj = Subject(symbol=sym, kind="crypto", name=_crypto_name(sym), yf=f"{sym}-USD")
-        else:
-            name, exch = _equity_meta(sym)
-            if not name:
-                print_error(f"Couldn't load '{escape(token)}'. Check the symbol or name.")
-                return None
-            subj = Subject(symbol=sym, kind="equity", name=name, exchange=exch)
-    return _finish(subj)
-
-
-def _finish(subj: Subject) -> Subject:
-    ctx.set_subject(subj)
-    _confirm(subj)
-    return subj
-
-
-def peer_subject(token: str) -> Subject | None:
-    """Resolve a peer token (from `compare X`) to a Subject without touching the
-    loaded context or printing a confirmation."""
-    token = token.strip()
-    if not token:
-        return None
-    from src.data.macro import MACRO_SERIES, resolve_macro
-    from src.data.symbols import looks_like_ticker, resolve_symbol
-    from src.data.crypto import is_crypto
-    up = token.upper()
+    from src.data.worldbank import COUNTRIES
+    from src.data.defillama import CHAINS
 
     if up in MACRO_SERIES:
         fred_id, name, _ = MACRO_SERIES[up]
@@ -157,14 +158,44 @@ def peer_subject(token: str) -> Subject | None:
     if up in SPECIAL_SUBJECTS:
         yf_sym, name, kind = SPECIAL_SUBJECTS[up]
         return Subject(symbol=up, kind=kind, name=name, yf=yf_sym)
+    if up in COUNTRIES:
+        iso, name = COUNTRIES[up]
+        return Subject(symbol=up, kind="country", name=name, ref=iso)
+    if up in CHAINS:
+        slug, name = CHAINS[up]
+        return Subject(symbol=up, kind="chain", name=name, ref=slug)
     if not looks_like_ticker(token) and token.isupper():
         m = resolve_macro(token)
         if m:
             return Subject(symbol=up, kind="macro", name=m[1], fred_id=m[0])
+
+    # Equity / ETF / crypto.
+    from src.data.symbols import resolve_symbol
+    from src.data.crypto import is_crypto
     sym = (resolve_symbol(token) or up).strip()
     if is_crypto(sym):
         return Subject(symbol=sym, kind="crypto", name=_crypto_name(sym), yf=f"{sym}-USD")
-    return Subject(symbol=sym, kind="equity")
+    name, exch, qtype = _equity_meta(sym)
+    if not name:
+        return None
+    kind = "etf" if qtype == "ETF" else "equity"
+    return Subject(symbol=sym, kind=kind, name=name, exchange=exch)
+
+
+def load_subject(token: str) -> Subject | None:
+    """Resolve a subject and print the one-line confirmation (router owns the set)."""
+    with _loading(f"loading {token.strip().upper()}"):
+        subj = resolve_subject(token)
+    if subj is None:
+        print_error(f"Couldn't load '{escape(token)}'. Check the symbol, name, "
+                    f"or prefix (chain: / country:).")
+        return None
+    _confirm(subj)
+    return subj
+
+
+# `compare` peers resolve the same way, just without the confirmation print.
+peer_subject = resolve_subject
 
 
 def _confirm(subj: Subject):
@@ -173,16 +204,16 @@ def _confirm(subj: Subject):
     console.print(f"  [bold {C}]{escape(subj.symbol)}[/] [{MUTE}]loaded[/]{tail}")
 
 
-def _equity_meta(sym: str) -> tuple[str, str]:
+def _equity_meta(sym: str) -> tuple[str, str, str]:
     try:
         import yfinance as yf
         info = yf.Ticker(sym).info or {}
         name = info.get("longName") or info.get("shortName") or ""
         exch = _EXCHANGE.get(info.get("exchange", ""),
                              info.get("exchangeAcronym") or info.get("exchange") or "")
-        return name, exch
+        return name, exch, (info.get("quoteType") or "").upper()
     except Exception:
-        return "", ""
+        return "", "", ""
 
 
 def _crypto_name(sym: str) -> str:
@@ -226,6 +257,14 @@ def v_price(subjects: list[Subject]):
             from src.data.crypto import get_crypto_quote
             _show(f"[{WHITE}]{escape(get_crypto_quote(s.symbol))}[/]", title=f"{s.symbol}  ›  Price")
             return
+        if s.kind == "country":
+            from src.data.worldbank import overview
+            _show(f"[{WHITE}]{escape(overview(s.ref, s.name))}[/]", title=f"{s.symbol}  ›  Macro")
+            return
+        if s.kind == "chain":
+            from src.data.defillama import chain_tvl
+            _show(f"[{WHITE}]{escape(chain_tvl(s.ref, s.name))}[/]", title=f"{s.symbol}  ›  TVL")
+            return
         if s.kind in ("index", "commodity", "fx"):
             from src.data.equities import get_simple_quote
             _show(f"[{WHITE}]{escape(get_simple_quote(s.yf, s.name))}[/]", title=f"{s.symbol}  ›  Price")
@@ -247,8 +286,13 @@ def _company_verb(subjects, fn, title: str):
 
 
 def v_financials(subjects: list[Subject]):
+    from src.data.sec_xbrl import get_xbrl_financials
     from src.data.equities import get_income, get_ratios
-    _company_verb(subjects, lambda t: f"{get_income(t)}\n\n{get_ratios(t)}", "Financials")
+    def _fn(t):
+        xbrl = get_xbrl_financials(t)               # authoritative, from filed 10-Ks
+        ratios = get_ratios(t)
+        return (xbrl + "\n\n" + ratios) if xbrl else (get_income(t) + "\n\n" + ratios)
+    _company_verb(subjects, _fn, "Financials")
 
 
 def v_earnings(subjects: list[Subject]):
@@ -348,14 +392,22 @@ def v_chart(subjects: list[Subject], rng: str | None, prev_verb: str | None):
         if s.kind == "macro":
             from src.data.macro import get_series
             vals = [v for _, v in get_series(s.fred_id, canon)]
-        else:
+        elif s.kind == "chain":
+            from src.data.defillama import chain_tvl_series
+            days = {"5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "ytd": 250,
+                    "1y": 365, "2y": 730, "5y": 1825, "10y": 3650, "max": 100000}.get(canon, 365)
+            vals = chain_tvl_series(s.ref, days) or []
+        elif s.is_priced:
             from src.data.equities import get_chart_data
             vals = get_chart_data(_yf_symbol(s), canon)
+        else:
+            vals = []
         if vals:
             series.append((s.symbol, vals))
 
     if not series:
-        print_error(f"No price history for {', '.join(s.symbol for s in subjects)}.")
+        print_error(f"No chartable history for {', '.join(s.symbol for s in subjects)} "
+                    f"(this subject type has no price series).")
         return
 
     label = _RANGE_LABEL.get(canon, canon)
@@ -363,6 +415,297 @@ def v_chart(subjects: list[Subject], rng: str | None, prev_verb: str | None):
         _single_chart(series[0][0], series[0][1], label)
     else:
         _multi_chart(series, label)
+
+
+# ── utility & data verbs ──────────────────────────────────────────────────────
+
+def _priced_items(subjects):
+    return [(s.symbol, _yf_symbol(s)) for s in subjects if s.is_priced]
+
+
+def _country_verb(subjects, fn, title):
+    s = subjects[0]
+    if s.kind != "country":
+        print_error(f"{title.lower()} needs a country — e.g. [white]US[/], [white]CHINA[/], "
+                    f"or [white]country:BR[/].")
+        return
+    with _loading(f"{s.symbol} {title.lower()}"):
+        body = fn(s.ref, s.name)
+    _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  {title}")
+
+
+def v_gdp(subjects):
+    from src.data.worldbank import gdp;        _country_verb(subjects, gdp, "GDP")
+
+
+def v_inflation(subjects):
+    from src.data.worldbank import inflation;  _country_verb(subjects, inflation, "Inflation")
+
+
+def v_trade(subjects):
+    from src.data.worldbank import trade;      _country_verb(subjects, trade, "Trade")
+
+
+def v_debt(subjects):
+    from src.data.worldbank import debt;       _country_verb(subjects, debt, "Debt")
+
+
+def v_tvl(subjects):
+    s = subjects[0]
+    if s.kind != "chain":
+        print_error("tvl needs a chain — e.g. [white]ETHEREUM[/] or [white]chain:arbitrum[/].")
+        return
+    from src.data.defillama import chain_tvl
+    with _loading(f"{s.symbol} tvl"):
+        body = chain_tvl(s.ref, s.name)
+    _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  TVL")
+
+
+def v_holdings(subjects):
+    from src.data.equities import get_etf_holdings
+    _company_or(subjects, get_etf_holdings, "Holdings")
+
+
+def v_short(subjects):
+    from src.data.equities import get_short_interest
+    _company_verb(subjects, get_short_interest, "Short Interest")
+
+
+def v_options(subjects):
+    from src.data.equities import get_options
+    _company_verb(subjects, get_options, "Options")
+
+
+def v_sentiment(subjects):
+    s = subjects[0]
+    if s.kind not in ("equity", "etf", "crypto"):
+        print_error("sentiment needs a stock or crypto subject.")
+        return
+    from src.data.news import get_sentiment
+    with _loading(f"{s.symbol} sentiment"):
+        body = get_sentiment(s.symbol)
+    _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  Sentiment")
+
+
+def v_seasonality(subjects):
+    s = subjects[0]
+    if not s.is_priced:
+        print_error("seasonality needs a priced subject (equity/ETF/index/FX/crypto).")
+        return
+    from src.data.analytics import seasonality
+    with _loading(f"{s.symbol} seasonality"):
+        body = seasonality(s.symbol, _yf_symbol(s))
+    _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  Seasonality")
+
+
+def v_trends(subjects):
+    s = subjects[0]
+    from src.data.trends import pageviews
+    with _loading(f"{s.symbol} attention"):
+        body = pageviews(s.name or s.symbol, s.symbol)
+    _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  Attention")
+
+
+def v_risk(subjects):
+    s = subjects[0]
+    from src.data.risk import risk_report
+    with _loading(f"{s.symbol} risk"):
+        body = risk_report(s.symbol, s.name or s.symbol)
+    _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  Risk")
+
+
+_SUPPLY_FRED = {
+    "OIL":    ("WCESTUS1", "U.S. Crude Oil Ending Stocks (thousand barrels)"),
+    "NATGAS": ("NGSTUS",   "U.S. Natural Gas in Underground Storage (Bcf)"),
+}
+
+
+def v_supply(subjects):
+    s = subjects[0]
+    spec = _SUPPLY_FRED.get(s.symbol)
+    if s.kind != "commodity" or not spec:
+        print_error("supply has inventory data for [white]OIL[/] and [white]NATGAS[/].")
+        return
+    fred_id, label = spec
+    from src.data.macro import get_series
+    with _loading(f"{s.symbol} supply"):
+        rows = get_series(fred_id, "2y")
+    if not rows:
+        print_error(f"Inventory series for {s.symbol} is unavailable right now.")
+        return
+    out = [label, "Source: FRED / EIA", "", f"  {'Date':<14} {'Level':>14}", "  " + "─" * 30]
+    for d, v in rows[-14:]:
+        out.append(f"  {d:<14} {v:>14,.0f}")
+    _show(f"[{WHITE}]" + "\n".join(out) + "[/]", title=f"{s.symbol}  ›  Supply")
+
+
+# ── set-aware analytics verbs ─────────────────────────────────────────────────
+
+def v_returns(subjects):
+    items = _priced_items(subjects)
+    if not items:
+        print_error("returns needs priced subjects (equity/ETF/index/FX/crypto).")
+        return
+    from src.data.analytics import returns_table
+    with _loading("computing returns"):
+        body = returns_table(items)
+    _show(f"[{WHITE}]{escape(body)}[/]", title="Returns")
+
+
+def v_stats(subjects):
+    items = _priced_items(subjects)
+    if not items:
+        print_error("stats needs priced subjects (equity/ETF/index/FX/crypto).")
+        return
+    from src.data.analytics import stats_table
+    with _loading("computing stats"):
+        body = stats_table(items)
+    _show(f"[{WHITE}]{escape(body)}[/]", title="Risk & Return")
+
+
+def v_corr(subjects):
+    items = _priced_items(subjects)
+    if len(items) < 2:
+        print_error("corr needs ≥2 priced subjects — e.g. [white]NVDA vs AMD vs SMH corr[/].")
+        return
+    from src.data.analytics import corr_matrix
+    with _loading("computing correlations"):
+        body = corr_matrix(items)
+    _show(f"[{WHITE}]{escape(body)}[/]", title="Correlation")
+
+
+def v_spread(subjects):
+    items = _priced_items(subjects)
+    if len(items) != 2:
+        print_error("spread needs exactly two priced subjects — e.g. [white]NVDA vs SMH spread[/].")
+        return
+    from src.data.analytics import spread_series
+    with _loading("computing spread"):
+        res = spread_series(items[0], items[1])
+    if not res:
+        print_error("Couldn't build that spread.")
+        return
+    label, vals = res
+    _single_chart(label, vals, "2 years")
+
+
+# ── global verbs (no subject needed) ──────────────────────────────────────────
+
+def v_hours(subjects):
+    from datetime import datetime, time
+    try:
+        from zoneinfo import ZoneInfo
+        now = datetime.now(ZoneInfo("America/New_York"))
+    except Exception:
+        now = datetime.now()
+    weekday = now.weekday() < 5
+    open_t, close_t = time(9, 30), time(16, 0)
+    is_open = weekday and open_t <= now.time() < close_t
+    status = "[#00c853]OPEN[/]" if is_open else "[#ff1744]CLOSED[/]"
+    if weekday and now.time() < open_t:
+        nxt = f"opens {open_t.strftime('%H:%M')} ET today"
+    elif is_open:
+        nxt = f"closes {close_t.strftime('%H:%M')} ET"
+    else:
+        nxt = "opens 09:30 ET next trading day"
+    rows = [
+        f"  US (NYSE / Nasdaq)   {status}   [{MUTE}]{escape(nxt)}[/]",
+        f"  [{MUTE}]Now {now.strftime('%a %H:%M')} ET[/]", "",
+        f"  [{MUTE}]Regular sessions (local):[/]",
+        f"  [{MUTE}]  London   08:00–16:30   ·   Tokyo 09:00–15:00   ·   "
+        f"Frankfurt 09:00–17:30[/]",
+    ]
+    _show("\n".join(rows), title="Market Hours")
+
+
+def v_export(subjects):
+    from pathlib import Path
+    from datetime import datetime
+    if not ctx.history:
+        print_error("Nothing to export yet — run some verbs first.")
+        return
+    d = Path.home() / ".fingpt" / "exports"
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / f"session-{datetime.now():%Y%m%d-%H%M%S}.md"
+    lines = [f"# FinR1 Terminal — session export", f"_{datetime.now():%Y-%m-%d %H:%M}_", ""]
+    for e in ctx.history:
+        lines.append(f"## {e['label']}\n\n```\n{e['text']}\n```\n")
+    path.write_text("\n".join(lines))
+    console.print(f"  [bold #00c853]✓[/] exported {len(ctx.history)} panels → "
+                  f"[white]{escape(str(path))}[/]\n")
+
+
+def v_convert(args):
+    import requests
+    toks = [a for a in args if a.lower() != "to"]
+    if len(toks) < 3:
+        print_error('Usage: [white]convert 100 USD EUR[/]')
+        return
+    try:
+        amt = float(toks[0].replace(",", ""))
+    except ValueError:
+        print_error("First argument must be a number — [white]convert 100 USD EUR[/].")
+        return
+    frm, to = toks[1].upper(), toks[2].upper()
+    try:
+        with _loading(f"{frm}→{to}"):
+            r = requests.get("https://api.frankfurter.app/latest",
+                             params={"amount": amt, "from": frm, "to": to}, timeout=10)
+            r.raise_for_status()
+            data = r.json()
+        rate = (data.get("rates") or {}).get(to)
+        if rate is None:
+            print_error(f"Couldn't convert {frm}→{to}. Use ISO currency codes (USD, EUR, JPY…).")
+            return
+        body = (f"  {amt:,.2f} {frm}  =  {rate:,.2f} {to}\n\n"
+                f"  [{MUTE}]rate 1 {frm} = {rate/amt:.4f} {to}   ·   "
+                f"{escape(data.get('date',''))}   ·   ECB[/]")
+        _show(body, title=f"Convert  ›  {frm} → {to}")
+    except Exception as e:
+        print_error(f"Conversion failed: {e}")
+
+
+def _company_or(subjects, fn, title):
+    """Like _company_verb but tolerant — for verbs (holdings) that also apply to ETFs."""
+    s = subjects[0]
+    with _loading(f"{s.symbol} {title.lower()}"):
+        body = fn(s.symbol)
+    _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  {title}")
+
+
+def v_yields(subjects):
+    from src.data.macro import get_yield_curve
+    with _loading("treasury yields"):
+        body = get_yield_curve()
+    _show(f"[{WHITE}]{escape(body)}[/]", title="US Treasury Yields")
+
+
+def v_fear(subjects):
+    from src.data.alt import get_fear_greed
+    with _loading("fear & greed"):
+        body = get_fear_greed()
+    _show(f"[{WHITE}]{escape(body)}[/]", title="Crypto Fear & Greed")
+
+
+def v_dominance(subjects):
+    from src.data.crypto import get_global_dominance
+    with _loading("market dominance"):
+        body = get_global_dominance()
+    _show(f"[{WHITE}]{escape(body)}[/]", title="Crypto Market Dominance")
+
+
+def v_coins(subjects):
+    from src.data.crypto import get_top_coins
+    with _loading("top coins"):
+        body = get_top_coins(15)
+    _show(f"[{WHITE}]{escape(body)}[/]", title="Top Coins by Market Cap")
+
+
+def v_sectors(subjects):
+    from src.data.equities import get_sectors
+    with _loading("sector performance"):
+        body = get_sectors()
+    _show(f"[{WHITE}]{escape(body)}[/]", title="US Sectors")
 
 
 # ── chart renderers ───────────────────────────────────────────────────────────
