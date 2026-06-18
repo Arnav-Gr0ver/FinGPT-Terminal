@@ -92,20 +92,6 @@ def _fetch_news(query: str, limit: int) -> list[dict]:
         return []
 
 
-def get_latest_news(limit: int = 15) -> str:
-    """Top financial headlines via SPY (S&P 500 ETF) as a market proxy."""
-    items = _fetch_news("SPY", limit)
-    if not items:
-        # try a few market tickers
-        for proxy in ("QQQ", "^GSPC", "AAPL"):
-            items = _fetch_news(proxy, limit)
-            if items:
-                break
-    if not items:
-        return "Could not fetch headlines. Check your connection."
-    return _format_news(items, "Latest Headlines")
-
-
 def search_news(query: str, limit: int = 12) -> str:
     items = _fetch_news(query, limit)
     if not items:
@@ -154,22 +140,6 @@ def _rel_time(ts) -> str:
         return f"{int(secs // 86400)}d"
     except Exception:
         return ""
-
-
-def get_headlines(query: str, limit: int = 4) -> list[dict]:
-    """Structured recent headlines: [{title, publisher, ago}]."""
-    items = _fetch_news(query, limit)
-    out = []
-    for item in items[:limit]:
-        n = _normalize(item)
-        if not n["title"]:
-            continue
-        out.append({
-            "title":     n["title"],
-            "publisher": n["publisher"],
-            "ago":       _rel_time(n["time"]) if n["time"] else "",
-        })
-    return out
 
 
 def get_sentiment(query: str, limit: int = 20) -> str:

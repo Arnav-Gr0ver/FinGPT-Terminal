@@ -38,7 +38,47 @@ VERB_META = {
     "dominance": "crypto dominance", "coins": "top crypto",
     "short": "short interest", "options": "option chain",
     "sentiment": "news sentiment", "sectors": "sector performance",
+    "splits": "split history", "unemployment": "country jobless",
+    "population": "country population", "indices": "world indices",
+    "commodities": "commodity board", "forex": "FX board",
+    "protocols": "top DeFi protocols", "stablecoins": "stablecoin caps",
 }
+
+# Which target kinds each function is relevant for (used to filter suggestions).
+_ALL = {"equity", "etf", "crypto", "index", "commodity", "fx", "macro", "country", "chain"}
+_PRICED = {"equity", "etf", "crypto", "index", "commodity", "fx"}
+APPLIES = {
+    "price": _ALL, "chart": _PRICED | {"macro", "chain"}, "news": _PRICED | {"country"},
+    "returns": _PRICED, "stats": _PRICED, "seasonality": _PRICED,
+    "compare": _PRICED, "corr": _PRICED, "spread": _PRICED,
+    "financials": {"equity"}, "earnings": {"equity"}, "profile": {"equity"},
+    "dividends": {"equity"}, "holders": {"equity", "etf"}, "insiders": {"equity"},
+    "analysts": {"equity"}, "filings": {"equity"}, "calendar": {"equity"},
+    "short": {"equity"}, "options": {"equity"}, "splits": {"equity"},
+    "sentiment": {"equity", "etf", "crypto"}, "holdings": {"etf"},
+    "gdp": {"country"}, "inflation": {"country"}, "trade": {"country"},
+    "debt": {"country"}, "unemployment": {"country"}, "population": {"country"},
+    "tvl": {"chain"}, "supply": {"commodity"}, "trends": _ALL, "risk": _ALL,
+}
+# Functions that run with no target loaded; value = kinds they're *also* relevant
+# to when something is loaded.
+GLOBAL_APPLIES = {
+    "hours": _ALL, "watch": _ALL, "export": _ALL, "convert": _ALL, "screen": _ALL,
+    "yields": {"macro", "equity", "etf", "index", "fx"},
+    "sectors": {"equity", "etf", "index"}, "indices": {"equity", "etf", "index"},
+    "commodities": {"commodity"}, "forex": {"fx"},
+    "coins": {"crypto", "chain"}, "dominance": {"crypto", "chain"},
+    "fear": {"crypto", "chain"}, "protocols": {"crypto", "chain"},
+    "stablecoins": {"crypto", "chain"},
+}
+_APPLIES_ALL = {**APPLIES, **GLOBAL_APPLIES}
+_GLOBAL_FUNCS = set(GLOBAL_APPLIES)
+
+
+def _func_applies(name: str, loaded_kinds: set) -> bool:
+    if not loaded_kinds:                       # nothing loaded → only global functions
+        return name in _GLOBAL_FUNCS
+    return bool(_APPLIES_ALL.get(name, _ALL) & loaded_kinds)
 
 
 def _category(text: str) -> str:
@@ -128,14 +168,14 @@ class GrammarCompleter(Completer):
                     yield comp(sym, name[:34])
 
         def verbs_():
+            from src.context import ctx
+            loaded_kinds = {s.kind for s in ctx.subjects}
             for v in sorted(VERBS):
-                if v == "ask":           # the AI command is /ask
-                    continue
-                if v.startswith(wl):
-                    yield comp(v, VERB_META.get(v, "verb"))
+                if v.startswith(wl) and _func_applies(v, loaded_kinds):
+                    yield comp(v, VERB_META.get(v, "function"))
             for c in ("vs", "&"):
                 if c.startswith(wl):
-                    yield comp(c, "add a subject")
+                    yield comp(c, "add a target")
 
         # Order by what's most likely next: subjects when loading, verbs after one.
         if cat == "subject":

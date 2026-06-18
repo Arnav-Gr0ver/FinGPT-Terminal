@@ -28,6 +28,12 @@ COUNTRIES = {
     "NG": ("NG", "Nigeria"), "EG": ("EG", "Egypt"), "AR": ("AR", "Argentina"),
     "AE": ("AE", "UAE"), "TH": ("TH", "Thailand"), "VN": ("VN", "Vietnam"),
     "IL": ("IL", "Israel"), "IE": ("IE", "Ireland"),
+    "PH": ("PH", "Philippines"), "MY": ("MY", "Malaysia"), "CL": ("CL", "Chile"),
+    "CO": ("CO", "Colombia"), "PE": ("PE", "Peru"), "GR": ("GR", "Greece"),
+    "PT": ("PT", "Portugal"), "AT": ("AT", "Austria"), "BE": ("BE", "Belgium"),
+    "DK": ("DK", "Denmark"), "FI": ("FI", "Finland"), "CZ": ("CZ", "Czechia"),
+    "HU": ("HU", "Hungary"), "NZ": ("NZ", "New Zealand"), "PK": ("PK", "Pakistan"),
+    "BD": ("BD", "Bangladesh"), "UA": ("UA", "Ukraine"),
 }
 
 
@@ -113,6 +119,30 @@ def debt(iso: str, name: str) -> str:
     for yr, v in d:
         bar = "█" * min(int(v / 5), 30)
         out.append(f"  {yr:<6} {v:>6.1f}%  {bar}")
+    return "\n".join(out)
+
+
+def unemployment(iso: str, name: str) -> str:
+    u = _series(iso, "SL.UEM.TOTL.ZS", 8)
+    if not u:
+        return f"No unemployment data for {name}."
+    out = [f"Unemployment Rate (% of labor force) — {name}", "Source: World Bank", ""]
+    for yr, v in u:
+        bar = "█" * min(int(v), 30)
+        out.append(f"  {yr:<6} {v:>5.1f}%  {bar}")
+    return "\n".join(out)
+
+
+def population(iso: str, name: str) -> str:
+    p = _series(iso, "SP.POP.TOTL", 6)
+    gr = dict(_series(iso, "SP.POP.GROW", 6))
+    if not p:
+        return f"No population data for {name}."
+    out = [f"Population — {name}", "Source: World Bank", "",
+           f"  {'Year':<8} {'Population':>16} {'Growth':>10}", "  " + "─" * 36]
+    for yr, v in p:
+        g = gr.get(yr)
+        out.append(f"  {yr:<8} {v/1e6:>14,.1f}M {(f'{g:+.1f}%' if g is not None else '—'):>10}")
     return "\n".join(out)
 
 

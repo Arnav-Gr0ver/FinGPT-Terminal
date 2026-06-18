@@ -85,16 +85,37 @@ SPECIAL_SUBJECTS = {
     "HANGSENG": ("^HSI",   "Hang Seng (HK)",       "index"),
     "SENSEX":   ("^BSESN", "BSE Sensex (India)",   "index"),
     "STOXX":    ("^STOXX50E", "Euro Stoxx 50",     "index"),
+    "KOSPI":    ("^KS11",  "KOSPI (Korea)",        "index"),
+    "ASX":      ("^AXJO",  "ASX 200 (Australia)",  "index"),
+    "TSX":      ("^GSPTSE","TSX (Canada)",         "index"),
+    "IBOVESPA": ("^BVSP",  "Ibovespa (Brazil)",    "index"),
+    "SMI":      ("^SSMI",  "SMI (Switzerland)",    "index"),
+    "AEX":      ("^AEX",   "AEX (Netherlands)",    "index"),
+    "IBEX":     ("^IBEX",  "IBEX 35 (Spain)",      "index"),
     # More commodities
     "WHEAT":    ("ZW=F",   "Wheat futures",        "commodity"),
     "CORN":     ("ZC=F",   "Corn futures",         "commodity"),
     "SOYBEAN":  ("ZS=F",   "Soybean futures",      "commodity"),
     "COFFEE":   ("KC=F",   "Coffee futures",       "commodity"),
     "SUGAR":    ("SB=F",   "Sugar futures",        "commodity"),
+    "COCOA":    ("CC=F",   "Cocoa futures",        "commodity"),
     "COTTON":   ("CT=F",   "Cotton futures",       "commodity"),
+    "OJ":       ("OJ=F",   "Orange Juice futures", "commodity"),
+    "GASOLINE": ("RB=F",   "RBOB Gasoline",        "commodity"),
+    "HEATINGOIL":("HO=F",  "Heating Oil",          "commodity"),
     "PLATINUM": ("PL=F",   "Platinum futures",     "commodity"),
     "PALLADIUM":("PA=F",   "Palladium futures",    "commodity"),
+    "ALUMINUM": ("ALI=F",  "Aluminum futures",     "commodity"),
     "URANIUM":  ("URA",    "Uranium (URA ETF)",    "commodity"),
+    # More FX
+    "NZDUSD":   ("NZDUSD=X", "Kiwi / US Dollar",   "fx"),
+    "USDMXN":   ("USDMXN=X", "US Dollar / Peso",   "fx"),
+    "USDINR":   ("USDINR=X", "US Dollar / Rupee",  "fx"),
+    "USDBRL":   ("USDBRL=X", "US Dollar / Real",   "fx"),
+    "USDKRW":   ("USDKRW=X", "US Dollar / Won",    "fx"),
+    "USDTRY":   ("USDTRY=X", "US Dollar / Lira",   "fx"),
+    "USDSEK":   ("USDSEK=X", "US Dollar / Krona",  "fx"),
+    "USDZAR":   ("USDZAR=X", "US Dollar / Rand",   "fx"),
 }
 
 
@@ -476,6 +497,21 @@ def v_options(subjects):
     _company_verb(subjects, get_options, "Options")
 
 
+def v_splits(subjects):
+    from src.data.equities import get_splits
+    _company_verb(subjects, get_splits, "Splits")
+
+
+def v_unemployment(subjects):
+    from src.data.worldbank import unemployment
+    _country_verb(subjects, unemployment, "Unemployment")
+
+
+def v_population(subjects):
+    from src.data.worldbank import population
+    _country_verb(subjects, population, "Population")
+
+
 def v_sentiment(subjects):
     s = subjects[0]
     if s.kind not in ("equity", "etf", "crypto"):
@@ -706,6 +742,45 @@ def v_sectors(subjects):
     with _loading("sector performance"):
         body = get_sectors()
     _show(f"[{WHITE}]{escape(body)}[/]", title="US Sectors")
+
+
+def _market_table(kind: str, title: str):
+    from src.data.equities import perf_table
+    items = [(name, yf) for (yf, name, k) in SPECIAL_SUBJECTS.values() if k == kind]
+    # de-dup by yf symbol (some aliases share a symbol)
+    seen, uniq = set(), []
+    for name, yf in items:
+        if yf not in seen:
+            seen.add(yf); uniq.append((name, yf))
+    with _loading(title.lower()):
+        body = perf_table(title, uniq, "Yahoo Finance · 1-day / 1-month")
+    _show(f"[{WHITE}]{escape(body)}[/]", title=title)
+
+
+def v_indices(subjects):
+    _market_table("index", "World Indices")
+
+
+def v_commodities(subjects):
+    _market_table("commodity", "Commodities")
+
+
+def v_forex(subjects):
+    _market_table("fx", "Foreign Exchange")
+
+
+def v_protocols(subjects):
+    from src.data.defillama import top_protocols
+    with _loading("defi protocols"):
+        body = top_protocols()
+    _show(f"[{WHITE}]{escape(body)}[/]", title="DeFi Protocols")
+
+
+def v_stablecoins(subjects):
+    from src.data.defillama import stablecoins
+    with _loading("stablecoins"):
+        body = stablecoins()
+    _show(f"[{WHITE}]{escape(body)}[/]", title="Stablecoins")
 
 
 # ── chart renderers ───────────────────────────────────────────────────────────

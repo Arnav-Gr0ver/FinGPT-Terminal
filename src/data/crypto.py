@@ -32,22 +32,6 @@ def _cg(path: str, params: dict = None):
     return r.json()
 
 
-def get_crypto_price(symbol: str):
-    """Lightweight (price, 24h_change_pct) for a crypto symbol, or None if unavailable."""
-    cg_id = _SYMBOL_MAP.get(symbol.upper().strip())
-    if not cg_id:
-        return None
-    try:
-        data = _cg("/simple/price", params={
-            "ids":                 cg_id,
-            "vs_currencies":       "usd",
-            "include_24hr_change": "true",
-        })
-        d = data.get(cg_id, {})
-        price = d.get("usd")
-        return (price, d.get("usd_24h_change")) if price is not None else None
-    except Exception:
-        return None
 
 
 def _large(n) -> str:

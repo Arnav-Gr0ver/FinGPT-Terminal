@@ -15,6 +15,9 @@ CHAINS = {
     "APTOS": ("Aptos", "Aptos"), "TON": ("Ton", "TON"),
     "SEI": ("Sei", "Sei"), "BLAST": ("Blast", "Blast"),
     "MANTLE": ("Mantle", "Mantle"), "LINEA": ("Linea", "Linea"),
+    "STARKNET": ("Starknet", "Starknet"), "ZKSYNC": ("zkSync Era", "zkSync Era"),
+    "SCROLL": ("Scroll", "Scroll"), "GNOSIS": ("Gnosis", "Gnosis"),
+    "CELO": ("Celo", "Celo"), "NEAR": ("Near", "Near"), "OSMOSIS": ("Osmosis", "Osmosis"),
 }
 
 
@@ -72,6 +75,49 @@ def chain_tvl(slug: str, name: str) -> str:
             out.append(f"  {mark} {c.get('name', '')[:16]:<16} {_fmt(c.get('tvl') or 0):>12}")
     except Exception:
         pass
+    return "\n".join(out)
+
+
+def top_protocols(n: int = 12) -> str:
+    """Largest DeFi protocols by TVL across all chains."""
+    try:
+        data = _get("/protocols")
+        top = sorted(data, key=lambda p: p.get("tvl") or 0, reverse=True)[:n]
+    except Exception as e:
+        return f"Could not fetch protocols: {e}"
+    out = ["Top DeFi Protocols by TVL", "Source: DeFiLlama", "",
+           f"  {'Protocol':<22}{'Category':<16}{'TVL':>12}{'7d':>8}", "  " + "─" * 58]
+    for p in top:
+        ch7 = p.get("change_7d")
+        c7  = f"{ch7:+.1f}%" if isinstance(ch7, (int, float)) else "—"
+        out.append(f"  {str(p.get('name',''))[:21]:<22}{str(p.get('category') or '')[:15]:<16}"
+                   f"{_fmt(p.get('tvl') or 0):>12}{c7:>8}")
+    return "\n".join(out)
+
+
+def stablecoins(n: int = 12) -> str:
+    """Largest stablecoins by circulating supply + total market cap."""
+    try:
+        r = requests.get("https://stablecoins.llama.fi/stablecoins?includePrices=false",
+                         headers=HEAD, timeout=15)
+        r.raise_for_status()
+        assets = r.json().get("peggedAssets", [])
+    except Exception as e:
+        return f"Could not fetch stablecoins: {e}"
+
+    def circ(a):
+        return (a.get("circulating") or {}).get("peggedUSD") or 0
+
+    total = sum(circ(a) for a in assets)
+    top = sorted(assets, key=circ, reverse=True)[:n]
+    out = ["Stablecoins by Circulating Supply", "Source: DeFiLlama",
+           f"Total stablecoin market cap: {_fmt(total)}", "",
+           f"  {'Name':<22}{'Symbol':<8}{'Circulating':>14}{'Share':>8}", "  " + "─" * 54]
+    for a in top:
+        c = circ(a)
+        share = f"{c/total*100:.1f}%" if total else "—"
+        out.append(f"  {str(a.get('name',''))[:21]:<22}{str(a.get('symbol',''))[:7]:<8}"
+                   f"{_fmt(c):>14}{share:>8}")
     return "\n".join(out)
 
 

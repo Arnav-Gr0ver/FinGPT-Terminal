@@ -61,12 +61,15 @@ _FUNCTIONS = [
     ("Company",  [("financials · earnings · profile","SEC 10-K figures · beat-miss · summary"),
                   ("dividends · holders · insiders",  "payouts · ownership · Form 4"),
                   ("analysts · filings · calendar",   "targets · filings · catalysts"),
-                  ("short · options · sentiment",     "short interest · options+IV · news tone")]),
-    ("Macro",    [("gdp · inflation · trade · debt",  "country macro"),
-                  ("tvl · holdings · supply",         "chain TVL · ETF holdings · inventories")]),
+                  ("short · options · sentiment · splits","short int · options+IV · tone · splits")]),
+    ("Country",  [("gdp · inflation · trade · debt",  "World Bank macro"),
+                  ("unemployment · population",       "labor force · population")]),
+    ("Chain/ETF",[("tvl · holdings · supply",         "chain TVL · ETF holdings · inventories")]),
     ("Signals",  [("trends · risk",                   "Wikipedia attention · disruption")]),
-    ("Markets",  [("yields · sectors",                "Treasury curve · sector performance"),
-                  ("fear · dominance · coins",        "crypto F&G · dominance · top coins")]),
+    ("Markets",  [("yields · sectors · indices",      "Treasury curve · sectors · world indices"),
+                  ("commodities · forex",             "commodity board · FX board"),
+                  ("fear · dominance · coins",        "crypto F&G · dominance · top coins"),
+                  ("protocols · stablecoins",         "top DeFi protocols · stablecoin caps")]),
     ("Find",     [("screen [name]",                   "gainers losers value tech… (bare = list)"),
                   ("watch · hours · export · convert","watchlist · hours · session→md · FX")]),
 ]
@@ -93,14 +96,14 @@ def print_help():
 
     targets = Table(box=None, show_header=False, padding=(0, 2, 0, 0))
     targets.add_column(style=f"bold {C}", no_wrap=True, width=10)
-    targets.add_column(style="bold #e8e8e8", no_wrap=True, width=34)
+    targets.add_column(style="bold #e8e8e8", no_wrap=True, width=36)
     targets.add_column(style="#8a8a8a")
     for i, (cmd, desc) in enumerate(_TARGETS):
         targets.add_row("TARGETS" if i == 0 else "", cmd, desc)
 
     funcs = Table(box=None, show_header=False, padding=(0, 2, 0, 0))
     funcs.add_column(style=f"bold {C}", no_wrap=True, width=10)
-    funcs.add_column(style="bold #e8e8e8", no_wrap=True, width=34)
+    funcs.add_column(style="bold #e8e8e8", no_wrap=True, width=36)
     funcs.add_column(style="#8a8a8a")
     for group, rows in _FUNCTIONS:
         for i, (cmd, desc) in enumerate(rows):
@@ -108,7 +111,7 @@ def print_help():
 
     ai = Table(box=None, show_header=False, padding=(0, 2, 0, 0))
     ai.add_column(style=f"bold {C}", no_wrap=True, width=10)
-    ai.add_column(style="bold #e8e8e8", no_wrap=True, width=34)
+    ai.add_column(style="bold #e8e8e8", no_wrap=True, width=36)
     ai.add_column(style="#8a8a8a")
     ai.add_row("ai · paid", "/ask [N|all] \"<q>\"", "Fin-R1 reasons over the data on screen")
     ai.add_row("system", "/help · /clear · /login · /exit", "slash commands")

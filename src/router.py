@@ -36,12 +36,15 @@ EACH = {
     "short":      verbs.v_short,
     "options":    verbs.v_options,
     "sentiment":  verbs.v_sentiment,
+    "splits":     verbs.v_splits,
     "seasonality": verbs.v_seasonality,
     "holdings":   verbs.v_holdings,
     "gdp":        verbs.v_gdp,
     "inflation":  verbs.v_inflation,
     "trade":      verbs.v_trade,
     "debt":       verbs.v_debt,
+    "unemployment": verbs.v_unemployment,
+    "population":  verbs.v_population,
     "tvl":        verbs.v_tvl,
     "supply":     verbs.v_supply,
     "trends":     verbs.v_trends,
@@ -66,6 +69,11 @@ GLOBAL = {
     "dominance": verbs.v_dominance,
     "coins":     verbs.v_coins,
     "sectors":   verbs.v_sectors,
+    "indices":   verbs.v_indices,
+    "commodities": verbs.v_commodities,
+    "forex":     verbs.v_forex,
+    "protocols": verbs.v_protocols,
+    "stablecoins": verbs.v_stablecoins,
 }
 
 # Functions that take their own arguments (handled in _parse / _execute).

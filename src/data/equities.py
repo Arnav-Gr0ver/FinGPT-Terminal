@@ -511,36 +511,56 @@ def get_options(ticker: str) -> str:
         return f"Could not fetch options for {ticker}: {e}"
 
 
-_SECTOR_ETFS = [
-    ("Technology", "XLK"), ("Financials", "XLF"), ("Health Care", "XLV"),
-    ("Cons. Disc.", "XLY"), ("Comm. Svcs", "XLC"), ("Industrials", "XLI"),
-    ("Cons. Staples", "XLP"), ("Energy", "XLE"), ("Utilities", "XLU"),
-    ("Materials", "XLB"), ("Real Estate", "XLRE"),
-]
-
-
-def get_sectors() -> str:
-    """US sector performance via SPDR sector ETFs (1-day and 1-month)."""
+def perf_table(title: str, items: list, source: str = "") -> str:
+    """Sorted performance table (last · 1D · 1M) for [(label, yf_symbol)]."""
     rows = []
-    for name, etf in _SECTOR_ETFS:
+    for label, sym in items:
         try:
-            t = yf.Ticker(etf)
+            t = yf.Ticker(sym)
             fast = t.fast_info
             price, prev = fast.last_price, fast.previous_close
             day = (price - prev) / prev * 100 if prev else None
             hist = t.history(period="1mo")["Close"].dropna()
             mo = (hist.iloc[-1] / hist.iloc[0] - 1) * 100 if len(hist) > 1 else None
-            rows.append((name, etf, day, mo))
+            rows.append((label, price, day, mo))
         except Exception:
-            rows.append((name, etf, None, None))
+            rows.append((label, None, None, None))
     rows.sort(key=lambda r: (r[2] if r[2] is not None else -99), reverse=True)
-    out = ["US Sector Performance   (SPDR sector ETFs)", "",
-           f"  {'Sector':<14} {'ETF':<6} {'1D':>8} {'1M':>8}", "  " + "─" * 38]
-    for name, etf, day, mo in rows:
+    out = [title] + ([source] if source else []) + [
+        "", f"  {'':<18}{'Last':>12}{'1D':>9}{'1M':>9}", "  " + "─" * 48]
+    for label, price, day, mo in rows:
+        p = f"{price:,.2f}" if price is not None else "—"
         d = f"{day:+.2f}%" if day is not None else "—"
         m = f"{mo:+.1f}%" if mo is not None else "—"
-        out.append(f"  {name:<14} {etf:<6} {d:>8} {m:>8}")
+        out.append(f"  {label[:18]:<18}{p:>12}{d:>9}{m:>9}")
     return "\n".join(out)
+
+
+_SECTOR_ETFS = [
+    ("Technology (XLK)", "XLK"), ("Financials (XLF)", "XLF"), ("Health Care (XLV)", "XLV"),
+    ("Cons Disc (XLY)", "XLY"), ("Comm Svcs (XLC)", "XLC"), ("Industrials (XLI)", "XLI"),
+    ("Cons Staples (XLP)", "XLP"), ("Energy (XLE)", "XLE"), ("Utilities (XLU)", "XLU"),
+    ("Materials (XLB)", "XLB"), ("Real Estate (XLRE)", "XLRE"),
+]
+
+
+def get_sectors() -> str:
+    return perf_table("US Sector Performance", _SECTOR_ETFS, "SPDR sector ETFs · 1-day / 1-month")
+
+
+def get_splits(ticker: str) -> str:
+    """Stock split history."""
+    try:
+        s = yf.Ticker(ticker).splits
+        if s is None or s.empty:
+            return f"No stock splits on record for {ticker.upper()}."
+        out = [f"Stock Splits — {ticker.upper()}", ""]
+        for date, ratio in s.tail(12).items():
+            r = f"{ratio:.0f}:1" if ratio >= 1 else f"1:{1/ratio:.0f}"
+            out.append(f"  {date.strftime('%b %d, %Y'):<16} {r}")
+        return "\n".join(out)
+    except Exception as e:
+        return f"Could not fetch splits for {ticker}: {e}"
 
 
 def get_chart_data(ticker: str, period: str = "1mo") -> list:

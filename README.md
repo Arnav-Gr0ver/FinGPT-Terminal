@@ -60,23 +60,22 @@ use the whole set; the rest run once per target. Some need no target at all.
 
 | Group | Functions | |
 |-------|-----------|--|
-| **Price** | `price` `chart <range>` | quote · price history |
-| | `returns` `stats` `seasonality` | trailing returns · vol/beta/drawdown · monthly pattern |
+| **Price** | `price` `chart <range>` `returns` `stats` `seasonality` | quote · history · returns · risk · monthly pattern |
 | **Compare** *(set)* | `compare` `corr` `spread` | side-by-side · correlation matrix · ratio over time |
-| **Company** | `financials` `earnings` `profile` | SEC-filed 10-K figures · beat/miss + next · summary |
-| | `dividends` `holders` `insiders` | payout history · ownership · SEC Form 4 |
-| | `analysts` `filings` `calendar` | price targets · 10-K/Q/8-K · catalysts |
-| | `short` `options` `sentiment` | short interest · option chain + IV · news tone |
-| **Macro / chain** | `gdp` `inflation` `trade` `debt` | country macro (World Bank) |
-| | `tvl` `holdings` `supply` | chain TVL · ETF constituents · oil/gas inventories |
+| **Company** | `financials` `earnings` `profile` `dividends` | 10-K figures · beat/miss · summary · payouts |
+| | `holders` `insiders` `analysts` `filings` `calendar` | ownership · Form 4 · targets · filings · catalysts |
+| | `short` `options` `sentiment` `splits` | short interest · option chain+IV · news tone · splits |
+| **Country** | `gdp` `inflation` `trade` `debt` `unemployment` `population` | World Bank macro |
+| **Chain / ETF** | `tvl` · `holdings` · `supply` | chain TVL · ETF constituents · oil/gas inventories |
 | **Signals** | `trends` `risk` | Wikipedia attention · news tone + major-quake risk |
-| **Markets** *(no target)* | `yields` `sectors` `fear` `dominance` `coins` | Treasury curve · sector perf · crypto fear&greed · dominance · top coins |
-| **Find / utility** | `screen [name]` | gainers · losers · value · tech … (bare = list) |
-| | `watch` `hours` `export` `convert` | watchlist · market hours · session→markdown · FX convert |
+| **Markets** *(no target)* | `yields` `sectors` `indices` `commodities` `forex` | Treasury curve · sectors · world indices · commodity & FX boards |
+| | `fear` `dominance` `coins` `protocols` `stablecoins` | crypto fear&greed · dominance · top coins · DeFi TVL · stablecoins |
+| **Find / utility** | `screen [name]` `watch` `hours` `export` `convert` | screener · watchlist · hours · session→md · FX |
 | **Ranges** | for `chart` | `5d 1mo 3mo 6mo ytd 1y 2y 5y 10y max` |
 
-The terminal tells you when a function doesn't fit a target (`gdp` needs a
-country, `financials` needs a company).
+Functions are **target-aware**: the completion menu only suggests ones that fit
+what's loaded (no `coins` when you're on equities, no `financials` on a country),
+and the terminal says so if you run one that doesn't apply.
 
 ---
 

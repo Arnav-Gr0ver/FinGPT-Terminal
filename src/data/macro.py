@@ -42,6 +42,16 @@ MACRO_SERIES: dict[str, tuple[str, str, str]] = {
     "RETAIL":   ("RSXFS",            "Retail Sales",                "$M"),
     "HOUSING":  ("HOUST",            "Housing Starts",              "thousands"),
     "SENTIMENT":("UMCSENT",          "U. Michigan Consumer Sentiment","index"),
+    "CLAIMS":   ("ICSA",             "Initial Jobless Claims",      "claims"),
+    "INDPRO":   ("INDPRO",           "Industrial Production",       "index"),
+    "T10Y2Y":   ("T10Y2Y",           "10Y–2Y Treasury Spread",      "%"),
+    "T10Y3M":   ("T10Y3M",           "10Y–3M Treasury Spread",      "%"),
+    "REALRATE": ("DFII10",           "10Y Real Treasury Yield",     "%"),
+    "MORTGAGE": ("MORTGAGE30US",     "30-Year Mortgage Rate",       "%"),
+    "DXYIDX":   ("DTWEXBGS",         "Broad US Dollar Index",       "index"),
+    "WTI":      ("DCOILWTICO",       "WTI Crude Oil Price",         "$"),
+    "VIXLVL":   ("VIXCLS",           "CBOE VIX (FRED)",             "index"),
+    "DEBT":     ("GFDEBTN",          "US Federal Debt",             "$M"),
 }
 
 

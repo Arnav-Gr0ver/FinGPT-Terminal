@@ -62,19 +62,6 @@ def get_fear_greed() -> str:
         return f"Could not fetch fear & greed data: {e}"
 
 
-def current_fear_greed() -> tuple:
-    """(value:int, classification:str) for today's crypto fear & greed, or (None, '')."""
-    try:
-        r = requests.get("https://api.alternative.me/fng/?limit=1", headers=HEADERS, timeout=10)
-        r.raise_for_status()
-        d = r.json().get("data", [])
-        if d:
-            return int(d[0].get("value", 0)), d[0].get("value_classification", "")
-    except Exception:
-        pass
-    return None, ""
-
-
 def get_prediction_markets(topic: str = "") -> str:
     """Polymarket — top active markets by volume via Gamma API."""
     try:
