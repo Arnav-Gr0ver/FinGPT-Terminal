@@ -35,6 +35,26 @@ EACH = {
     "insiders":   verbs.v_insiders,
     "short":      verbs.v_short,
     "options":    verbs.v_options,
+    "ftd":        verbs.v_ftd,
+    "cot":        verbs.v_cot,
+    "contracts":  verbs.v_contracts,
+    "buzz":       verbs.v_buzz,
+    "fda":        verbs.v_fda,
+    "regulations": verbs.v_regulations,
+    "github":     verbs.v_github,
+    "trials":     verbs.v_trials,
+    "peers":      verbs.v_peers,
+    "lobbying":   verbs.v_lobbying,
+    "hiring":     verbs.v_hiring,
+    "shortvol":   verbs.v_shortvol,
+    "governance": verbs.v_governance,
+    "funding":    verbs.v_funding,
+    "cryptovol":  verbs.v_cryptovol,
+    "cotfin":     verbs.v_cotfin,
+    "constituents": verbs.v_constituents,
+    "carry":      verbs.v_carry,
+    "weather":    verbs.v_weather,
+    "gtrends":    verbs.v_gtrends,
     "sentiment":  verbs.v_sentiment,
     "splits":     verbs.v_splits,
     "seasonality": verbs.v_seasonality,
@@ -45,6 +65,12 @@ EACH = {
     "debt":       verbs.v_debt,
     "unemployment": verbs.v_unemployment,
     "population":  verbs.v_population,
+    "reserves":   verbs.v_reserves,
+    "co2":        verbs.v_co2,
+    "military":   verbs.v_military,
+    "health":     verbs.v_health,
+    "corruption": verbs.v_corruption,
+    "market":     verbs.v_market,
     "tvl":        verbs.v_tvl,
     "supply":     verbs.v_supply,
     "trends":     verbs.v_trends,
@@ -65,9 +91,29 @@ GLOBAL = {
     "hours":     verbs.v_hours,
     "export":    verbs.v_export,
     "yields":    verbs.v_yields,
+    "usdebt":    verbs.v_usdebt,
+    "refrates":  verbs.v_refrates,
+    "auctions":  verbs.v_auctions,
+    "budget":    verbs.v_budget,
+    "recession": verbs.v_recession,
+    "stress":    verbs.v_stress,
+    "ipos":      verbs.v_ipos,
+    "holidays":  verbs.v_holidays,
+    "bigmac":    verbs.v_bigmac,
     "fear":      verbs.v_fear,
     "dominance": verbs.v_dominance,
     "coins":     verbs.v_coins,
+    "trending":  verbs.v_trending,
+    "onchain":   verbs.v_onchain,
+    "pools":     verbs.v_pools,
+    "dexs":      verbs.v_dexs,
+    "fees":      verbs.v_fees,
+    "chains":    verbs.v_chains,
+    "hacks":     verbs.v_hacks,
+    "treasuries": verbs.v_treasuries,
+    "congress":  verbs.v_congress,
+    "disasters": verbs.v_disasters,
+    "politics":  verbs.v_politics,
     "sectors":   verbs.v_sectors,
     "indices":   verbs.v_indices,
     "commodities": verbs.v_commodities,
@@ -77,7 +123,7 @@ GLOBAL = {
 }
 
 # Functions that take their own arguments (handled in _parse / _execute).
-ARG_VERBS = {"chart", "compare", "screen", "convert"}
+ARG_VERBS = {"chart", "compare", "screen", "convert", "predictions", "forecasts"}
 
 VERBS = set(EACH) | set(SETV) | set(GLOBAL) | ARG_VERBS
 
@@ -185,6 +231,12 @@ def _parse(tokens: list[str]):
             while i < len(tokens) and tokens[i].lower() not in VERBS:
                 args.append(tokens[i]); i += 1
             steps.append(("convert", args))
+        elif low in ("predictions", "forecasts"):
+            args = []
+            while (i < len(tokens) and tokens[i].lower() not in VERBS
+                   and tokens[i].lower() not in CONNECTORS):
+                args.append(tokens[i]); i += 1
+            steps.append((low, args))
         else:
             steps.append((low, None))
     return steps
@@ -220,6 +272,10 @@ def _execute(steps):
             verbs.v_screen(arg); prev_verb = name; continue
         if name == "convert":
             verbs.v_convert(arg); prev_verb = name; continue
+        if name == "predictions":
+            verbs.v_predictions(arg); prev_verb = name; continue
+        if name == "forecasts":
+            verbs.v_forecasts(arg); prev_verb = name; continue
         if name in GLOBAL:
             GLOBAL[name](active); prev_verb = name; continue
 

@@ -44,3 +44,37 @@ def pageviews(article: str, label: str = "") -> str:
         f"  7-day avg      {recent:,.0f}/day   ({chg:+.0f}% vs start of window)",
         f"  Peak           {hi:,} views",
     ])
+
+
+def google_trends(query: str, label: str = "") -> str:
+    """Google search interest over the last 12 months (0–100, relative to peak).
+    Source: Google Trends via pytrends — unofficial and rate-limited, so this can
+    occasionally come back empty."""
+    try:
+        from pytrends.request import TrendReq
+        pt = TrendReq(hl="en-US", tz=0)
+        pt.build_payload([query], timeframe="today 12-m")
+        df = pt.interest_over_time()
+    except Exception as e:
+        return f"Google Trends is unavailable right now ({type(e).__name__})."
+    if df is None or df.empty or query not in df:
+        return f"No Google Trends data for '{query}'."
+
+    vals = [int(v) for v in df[query].tolist() if v == v]
+    if not vals:
+        return f"No Google Trends data for '{query}'."
+    lo, hi = min(vals), max(vals)
+    rng = (hi - lo) or 1
+    spark = "".join(_SPARK[min(int((v - lo) / rng * 7), 7)] for v in vals[-52:])
+    cur = vals[-1]
+    avg = sum(vals) / len(vals)
+    chg = (cur - avg) / (avg or 1) * 100
+    return "\n".join([
+        f"Search Interest — {label or query}  (Google Trends, 12m)",
+        "Source: Google Trends · 100 = peak interest",
+        "",
+        f"  52-week trend   {spark}",
+        f"  Current         {cur}/100",
+        f"  12-month avg    {avg:.0f}/100   ({chg:+.0f}% vs average)",
+        f"  Peak            {hi}/100",
+    ])

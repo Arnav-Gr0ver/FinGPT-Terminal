@@ -26,3 +26,6 @@ urllib3==2.7.0
 wcwidth==0.8.1
 websockets==16.0
 yfinance==1.4.1
+yahooquery>=2.3.0
+exchange_calendars>=4.5
+pytrends>=4.9.0

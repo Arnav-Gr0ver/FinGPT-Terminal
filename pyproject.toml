@@ -18,6 +18,9 @@ dependencies = [
     "requests>=2.31.0",
     "lxml>=4.9.0",
     "pandas>=2.0.0",
+    "yahooquery>=2.3.0",        # peers (Yahoo recommendation graph)
+    "exchange_calendars>=4.5",  # exchange target — real trading sessions
+    "pytrends>=4.9.0",          # gtrends (Google search interest)
 ]
 
 [project.scripts]

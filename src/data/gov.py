@@ -284,6 +284,56 @@ def get_congress_trades(ticker: str = "") -> str:
 # Failure to Deliver — SEC published CSV files
 # ---------------------------------------------------------------------------
 
+def recent_ipos(n: int = 15) -> str:
+    """The IPO pipeline — most recent S-1 registration statements filed with the
+    SEC (companies preparing to go public). Source: SEC EDGAR full-text search."""
+    import re
+    try:
+        r = requests.get("https://efts.sec.gov/LATEST/search-index",
+                         params={"forms": "S-1", "dateRange": "custom",
+                                 "startdt": (datetime.utcnow() - timedelta(days=120)).strftime("%Y-%m-%d"),
+                                 "enddt": datetime.utcnow().strftime("%Y-%m-%d")},
+                         headers=HEADERS, timeout=15)
+        r.raise_for_status()
+        hits = r.json().get("hits", {}).get("hits", [])
+    except Exception as e:
+        return f"Could not fetch the IPO pipeline: {e}"
+    if not hits:
+        return "No recent S-1 filings found."
+
+    seen, rows = set(), []
+    for h in hits:
+        s = h.get("_source", {})
+        names = s.get("display_names") or []
+        if not names:
+            continue
+        raw = names[0]
+        ticker = ""
+        m = re.search(r"\(([A-Z]{1,6})\)", raw)
+        if m:
+            ticker = m.group(1)
+        company = re.sub(r"\s*\(.*", "", raw).strip()[:34]
+        key = company.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append((s.get("file_date", "")[:10], company, ticker, s.get("file_type", "S-1")))
+        if len(rows) >= n:
+            break
+
+    out = [
+        "IPO Pipeline — Recent S-1 Registrations",
+        "Source: SEC EDGAR · companies filing to go public",
+        "",
+        f"  {'Filed':<12}{'Company':<36}{'Ticker':<8}Form",
+        "  " + "─" * 64,
+    ]
+    for date, company, ticker, form in rows:
+        out.append(f"  {date:<12}{company:<36}{ticker or '—':<8}{form}")
+    out += ["", "  S-1/A = amended registration.  Load any ticker to research it."]
+    return "\n".join(out)
+
+
 def get_ftd(ticker: str) -> str:
     ticker = ticker.upper().strip()
     try:

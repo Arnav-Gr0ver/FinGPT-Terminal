@@ -370,3 +370,331 @@ def get_gdp() -> str:
         return "\n".join(lines)
     except Exception as e:
         return f"Could not fetch GDP data: {e}"
+
+
+# U.S. Treasury — "debt to the penny" via the FiscalData API (no key required).
+FISCALDATA = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service"
+
+
+def get_national_debt() -> str:
+    """US total public debt outstanding — latest level, 1M/1Y change, monthly trend.
+    Source: U.S. Treasury FiscalData (open data, no API key)."""
+    try:
+        r = requests.get(
+            f"{FISCALDATA}/v2/accounting/od/debt_to_penny",
+            params={"sort": "-record_date", "page[size]": 400,
+                    "fields": "record_date,tot_pub_debt_out_amt"},
+            headers=HEADERS, timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json().get("data", [])
+    except Exception as e:
+        return f"Could not fetch national debt data: {e}"
+
+    rows = []
+    for d in data:
+        try:
+            rows.append((d["record_date"], float(d["tot_pub_debt_out_amt"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not rows:
+        return "National debt data is unavailable right now."
+
+    def _t(v):
+        return f"${v/1e12:.2f}T"
+
+    latest_date, latest = rows[0]
+
+    def _change(days):
+        target = datetime.strptime(latest_date, "%Y-%m-%d") - timedelta(days=days)
+        for dt, val in rows:                       # rows are newest-first
+            if datetime.strptime(dt, "%Y-%m-%d") <= target:
+                delta = latest - val
+                pct   = (delta / val * 100) if val else 0
+                return f"{'+' if delta >= 0 else '−'}{_t(abs(delta))}  ({pct:+.1f}%)"
+        return "—"
+
+    # One sample per calendar month, newest first.
+    monthly, seen = [], set()
+    for dt, val in rows:
+        ym = dt[:7]
+        if ym not in seen:
+            seen.add(ym)
+            monthly.append((dt, val))
+        if len(monthly) >= 8:
+            break
+
+    avg_rate = _avg_interest_rate()
+
+    lines = [
+        "US National Debt — Total Public Debt Outstanding",
+        "Source: U.S. Treasury · FiscalData (debt to the penny)",
+        "",
+        f"  {'Current':<12} {_t(latest):>10}   ({latest_date})",
+        f"  {'1-month':<12} {_change(30):>10}",
+        f"  {'1-year':<12} {_change(365):>10}",
+    ]
+    if avg_rate:
+        rate, rate_date = avg_rate
+        lines.append(f"  {'Avg rate':<12} {rate:>9.2f}%   (marketable debt, {rate_date})")
+    lines += [
+        "",
+        "  Recent (month-end snapshots):",
+        f"  {'Date':<14} {'Total Debt':>12}",
+        "  " + "─" * 28,
+    ]
+    for dt, val in monthly:
+        lines.append(f"  {dt:<14} {_t(val):>12}")
+    return "\n".join(lines)
+
+
+def recession_signal() -> str:
+    """Yield-curve recession signal — the 10y–2y and 10y–3m Treasury spreads.
+    A sustained inversion (negative) has preceded every recent US recession.
+    Source: FRED."""
+    s102 = _fred("T10Y2Y", limit=380)
+    s103 = _fred("T10Y3M", limit=380)
+    if not s102:
+        return "Yield-curve data is unavailable right now."
+
+    def at(series, days):
+        if not series:
+            return None
+        target = datetime.strptime(series[-1][0], "%Y-%m-%d") - timedelta(days=days)
+        for d, v in reversed(series):
+            if datetime.strptime(d, "%Y-%m-%d") <= target:
+                return v
+        return None
+
+    cur2, cur3 = s102[-1][1], (s103[-1][1] if s103 else None)
+    inverted = cur2 < 0
+    status = ("INVERTED — historically a recession warning" if inverted
+              else "normal (positive slope)")
+    out = [
+        "Yield-Curve Recession Signal",
+        f"Source: FRED · {s102[-1][0]}",
+        "",
+        f"  {'10y − 2y spread':<20} {cur2:>+6.2f}%   ({'inverted' if cur2 < 0 else 'normal'})",
+    ]
+    if cur3 is not None:
+        out.append(f"  {'10y − 3m spread':<20} {cur3:>+6.2f}%   ({'inverted' if cur3 < 0 else 'normal'})")
+    m1, y1 = at(s102, 30), at(s102, 365)
+    out += [
+        "",
+        f"  {'1 month ago':<20} {(f'{m1:+.2f}%' if m1 is not None else '—'):>7}",
+        f"  {'1 year ago':<20} {(f'{y1:+.2f}%' if y1 is not None else '—'):>7}",
+        "",
+        f"  Read: {status}.",
+    ]
+    return "\n".join(out)
+
+
+# Currency → FRED long-term (10y) government bond yield series.
+_CCY_RATE = {
+    "USD": "IRLTLT01USM156N", "EUR": "IRLTLT01DEM156N", "JPY": "IRLTLT01JPM156N",
+    "GBP": "IRLTLT01GBM156N", "CAD": "IRLTLT01CAM156N", "AUD": "IRLTLT01AUM156N",
+    "CHF": "IRLTLT01CHM156N", "NZD": "IRLTLT01NZM156N", "SEK": "IRLTLT01SEM156N",
+    "NOK": "IRLTLT01NOM156N", "KR": "IRLTLT01KRM156N", "MX": "IRLTLT01MXM156N",
+}
+
+
+def carry(fx_symbol: str) -> str:
+    """Interest-rate (carry) differential between the two legs of an FX pair, using
+    10-year government bond yields. Positive = the base currency out-yields the
+    quote currency. Source: FRED."""
+    sym = (fx_symbol or "").upper().replace("=X", "")
+    if len(sym) != 6:
+        return "carry needs a 6-letter FX pair (e.g. EURUSD)."
+    base, quote = sym[:3], sym[3:]
+    bs, qs = _CCY_RATE.get(base), _CCY_RATE.get(quote)
+    if not bs or not qs:
+        return f"No long-yield series for {base}/{quote}. Covered: " + ", ".join(_CCY_RATE)
+
+    br = _fred(bs, limit=3)
+    qr = _fred(qs, limit=3)
+    if not br or not qr:
+        return f"Yield data unavailable for {base} or {quote} right now."
+    bv, qv = br[-1][1], qr[-1][1]
+    diff = bv - qv
+    lean = (f"positive carry — holding {base} earns ~{diff:.2f}% over {quote}" if diff > 0
+            else f"negative carry — holding {base} costs ~{abs(diff):.2f}% vs {quote}")
+    return "\n".join([
+        f"Carry — {base}/{quote}  (10-year yield differential)",
+        f"Source: FRED · {br[-1][0]}",
+        "",
+        f"  {base} 10y yield      {bv:>6.2f}%",
+        f"  {quote} 10y yield      {qv:>6.2f}%",
+        f"  {'Differential':<18} {diff:>+6.2f}%",
+        "",
+        f"  Read: {lean}.",
+    ])
+
+
+def federal_budget() -> str:
+    """US federal budget balance — monthly surplus/deficit and the trailing
+    12-month total. Source: FRED / U.S. Treasury (Monthly Treasury Statement)."""
+    rows = _fred("MTSDS133FMS", limit=14)          # millions USD, monthly, deficit < 0
+    if not rows:
+        return "Federal budget data is unavailable right now."
+
+    def _b(v):                                     # millions → $B / $T
+        a = abs(v) / 1000
+        return (f"-${a/1000:.2f}T" if v < 0 else f"+${a/1000:.2f}T") if a >= 1000 \
+            else (f"-${a:.1f}B" if v < 0 else f"+${a:.1f}B")
+
+    last12 = rows[-12:]
+    rolling = sum(v for _, v in last12)
+    latest_d, latest_v = rows[-1]
+    out = [
+        "US Federal Budget Balance  (surplus +, deficit −)",
+        "Source: FRED · U.S. Treasury Monthly Treasury Statement",
+        "",
+        f"  {'Latest month':<18} {_b(latest_v):>10}   ({latest_d})",
+        f"  {'Trailing 12-month':<18} {_b(rolling):>10}",
+        "",
+        "  Recent months:",
+        f"  {'Month':<10} {'Balance':>12}",
+        "  " + "─" * 26,
+    ]
+    for d, v in reversed(last12):
+        out.append(f"  {d:<10} {_b(v):>12}")
+    return "\n".join(out)
+
+
+# Foreign currency of each FX pair → Big Mac currency_code.
+_BIGMAC_CCY = {
+    "EURUSD": "EUR", "GBPUSD": "GBP", "USDJPY": "JPY", "AUDUSD": "AUD",
+    "USDCAD": "CAD", "USDCHF": "CHF", "USDCNY": "CNY", "NZDUSD": "NZD",
+    "USDMXN": "MXN", "USDINR": "INR", "USDBRL": "BRL", "USDKRW": "KRW",
+    "USDTRY": "TRY", "USDSEK": "SEK", "USDZAR": "ZAR",
+}
+
+_BIGMAC_CSV = ("https://raw.githubusercontent.com/TheEconomist/big-mac-data/"
+               "master/output-data/big-mac-full-index.csv")
+
+
+def big_mac(fx_symbol: str = "") -> str:
+    """The Economist's Big Mac Index — burgernomics PPP. Positive = the currency
+    looks over-valued vs the USD (GDP-adjusted), negative = under-valued."""
+    try:
+        text = requests.get(_BIGMAC_CSV, headers=HEADERS, timeout=15).text
+        rows = list(csv.DictReader(io.StringIO(text)))
+    except Exception as e:
+        return f"Could not fetch the Big Mac Index: {e}"
+    if not rows:
+        return "Big Mac Index data is unavailable right now."
+
+    latest_date = max(r["date"] for r in rows)
+    latest = [r for r in rows if r["date"] == latest_date]
+
+    def adj(r):
+        try:
+            return float(r.get("USD_adjusted")) * 100
+        except (TypeError, ValueError):
+            return None
+
+    target = _BIGMAC_CCY.get((fx_symbol or "").upper())
+    if target:
+        row = next((r for r in latest if r.get("currency_code") == target), None)
+        if not row:
+            return f"No Big Mac data for {target}."
+        v = adj(row)
+        verdict = "over-valued" if (v or 0) > 0 else "under-valued"
+        return "\n".join([
+            f"Big Mac Index — {row.get('name','')} ({target})",
+            f"Source: The Economist · {latest_date}",
+            "",
+            f"  Local price (USD)     ${float(row.get('dollar_price',0)):.2f}",
+            f"  vs US Dollar          {v:+.1f}%  ({verdict}, GDP-adjusted)",
+            "",
+            "  Positive = currency looks expensive vs the dollar.",
+        ])
+
+    ranked = sorted(((r.get("name", ""), r.get("currency_code", ""), adj(r))
+                     for r in latest if adj(r) is not None),
+                    key=lambda x: x[2], reverse=True)
+    out = [
+        "Big Mac Index — Currency Valuation vs USD",
+        f"Source: The Economist · {latest_date} · GDP-adjusted",
+        "",
+        f"  {'Country':<20}{'Ccy':<6}{'vs USD':>9}",
+        "  " + "─" * 38,
+    ]
+    for nm, ccy, v in ranked[:8] + [("…", "", None)] + ranked[-8:]:
+        if v is None:
+            out.append("  " + "·" * 34)
+            continue
+        bar = ("▲" if v >= 0 else "▼") * min(int(abs(v) / 5), 10)
+        out.append(f"  {nm[:19]:<20}{ccy:<6}{v:>+8.1f}%  {bar}")
+    return "\n".join(out)
+
+
+def treasury_auctions(n: int = 12) -> str:
+    """Recent U.S. Treasury auction results — term, high yield, and bid-to-cover
+    (demand). Source: Treasury FiscalData (no key)."""
+    try:
+        data = requests.get(
+            f"{FISCALDATA}/v1/accounting/od/auctions_query",
+            params={"sort": "-auction_date", "page[size]": 120,
+                    "fields": ("auction_date,security_type,security_term,high_yield,"
+                               "high_investment_rate,int_rate,bid_to_cover_ratio,offering_amt")},
+            headers=HEADERS, timeout=15,
+        ).json().get("data", [])
+    except Exception as e:
+        return f"Could not fetch Treasury auctions: {e}"
+
+    def clean(v):
+        return None if v in (None, "null", "") else v
+
+    rows = []
+    for d in data:
+        btc = clean(d.get("bid_to_cover_ratio"))
+        yld = clean(d.get("high_yield")) or clean(d.get("high_investment_rate")) or clean(d.get("int_rate"))
+        if btc is None and yld is None:
+            continue                      # auction not settled / no results yet
+        rows.append((d.get("auction_date", "")[:10],
+                     f"{d.get('security_type','')} {d.get('security_term','')}".strip(),
+                     yld, btc, clean(d.get("offering_amt"))))
+        if len(rows) >= n:
+            break
+    if not rows:
+        return "No recent settled Treasury auctions found."
+
+    out = [
+        "US Treasury Auctions — Recent Results",
+        "Source: U.S. Treasury · FiscalData",
+        "",
+        f"  {'Auction':<12}{'Security':<22}{'High Yield':>11}{'Bid/Cover':>11}",
+        "  " + "─" * 56,
+    ]
+    for date, sec, yld, btc, _amt in rows:
+        try:
+            yld_s = f"{float(yld):.3f}%"
+        except (TypeError, ValueError):
+            yld_s = "—"
+        try:
+            btc_s = f"{float(btc):.2f}x"
+        except (TypeError, ValueError):
+            btc_s = "—"
+        out.append(f"  {date:<12}{sec[:21]:<22}{yld_s:>11}{btc_s:>11}")
+    out += ["", "  Bid-to-cover = total bids ÷ amount sold; higher = stronger demand."]
+    return "\n".join(out)
+
+
+def _avg_interest_rate():
+    """Weighted-average interest rate on total marketable Treasury debt (latest).
+    Returns (rate_pct, record_date) or None. Source: Treasury FiscalData."""
+    try:
+        data = requests.get(
+            f"{FISCALDATA}/v2/accounting/od/avg_interest_rates",
+            params={"sort": "-record_date",
+                    "filter": "security_desc:eq:Total Marketable",
+                    "page[size]": 1,
+                    "fields": "record_date,avg_interest_rate_amt"},
+            headers=HEADERS, timeout=12,
+        ).json().get("data", [])
+        if data:
+            return float(data[0]["avg_interest_rate_amt"]), data[0]["record_date"]
+    except Exception:
+        pass
+    return None

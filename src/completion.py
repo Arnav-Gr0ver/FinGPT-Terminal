@@ -37,39 +37,97 @@ VERB_META = {
     "yields": "Treasury curve", "fear": "crypto fear & greed",
     "dominance": "crypto dominance", "coins": "top crypto",
     "short": "short interest", "options": "option chain",
+    "ftd": "fails-to-deliver (SEC)", "cot": "CFTC positioning",
+    "contracts": "federal awards", "buzz": "Hacker News",
+    "fda": "FDA recalls", "regulations": "Federal Register", "github": "dev activity",
     "sentiment": "news sentiment", "sectors": "sector performance",
     "splits": "split history", "unemployment": "country jobless",
-    "population": "country population", "indices": "world indices",
+    "population": "country population", "reserves": "FX reserves",
+    "indices": "world indices",
     "commodities": "commodity board", "forex": "FX board",
     "protocols": "top DeFi protocols", "stablecoins": "stablecoin caps",
+    "usdebt": "US national debt", "predictions": "Polymarket odds",
+    "refrates": "SOFR / fed funds", "stress": "OFR stress index",
+    "onchain": "Bitcoin network", "trending": "trending coins",
+    "pools": "DeFi yield pools", "dexs": "DEX volumes",
+    "fees": "protocol fees", "chains": "chains by TVL",
+    "auctions": "Treasury auctions", "budget": "federal deficit",
+    "hacks": "crypto exploits", "ipos": "S-1 pipeline",
+    "holidays": "market holidays", "bigmac": "Big Mac index",
+    "trials": "clinical trials", "peers": "co-watched names",
+    "governance": "DAO votes", "funding": "perp funding",
+    "constituents": "index members", "carry": "rate differential",
+    "weather": "growing-region wx", "gtrends": "Google Trends",
+    "recession": "yield-curve signal",
+    "co2": "emissions", "military": "defense spend",
+    "health": "life expectancy", "market": "benchmark index",
+    "corruption": "governance index", "lobbying": "lobby spend (LDA)",
+    "hiring": "open job roles", "shortvol": "FINRA short %",
+    "cryptovol": "DVOL implied vol", "cotfin": "TFF positioning",
+    "treasuries": "corp BTC/ETH", "congress": "congress trades",
+    "disasters": "FEMA declarations", "politics": "PredictIt odds",
+    "forecasts": "Manifold odds",
 }
 
 # Which target kinds each function is relevant for (used to filter suggestions).
-_ALL = {"equity", "etf", "crypto", "index", "commodity", "fx", "macro", "country", "chain"}
+_ALL = {"equity", "etf", "crypto", "index", "commodity", "fx", "macro", "country",
+        "chain", "protocol", "stablecoin", "exchange", "topic"}
 _PRICED = {"equity", "etf", "crypto", "index", "commodity", "fx"}
 APPLIES = {
-    "price": _ALL, "chart": _PRICED | {"macro", "chain"}, "news": _PRICED | {"country"},
+    "price": _ALL, "chart": _PRICED | {"macro", "chain", "protocol"},
+    "news": _PRICED | {"country", "topic"},
     "returns": _PRICED, "stats": _PRICED, "seasonality": _PRICED,
     "compare": _PRICED, "corr": _PRICED, "spread": _PRICED,
-    "financials": {"equity"}, "earnings": {"equity"}, "profile": {"equity"},
+    "financials": {"equity"}, "earnings": {"equity"}, "profile": {"equity", "country"},
     "dividends": {"equity"}, "holders": {"equity", "etf"}, "insiders": {"equity"},
     "analysts": {"equity"}, "filings": {"equity"}, "calendar": {"equity"},
     "short": {"equity"}, "options": {"equity"}, "splits": {"equity"},
+    "ftd": {"equity"},
     "sentiment": {"equity", "etf", "crypto"}, "holdings": {"etf"},
     "gdp": {"country"}, "inflation": {"country"}, "trade": {"country"},
     "debt": {"country"}, "unemployment": {"country"}, "population": {"country"},
+    "reserves": {"country"},
     "tvl": {"chain"}, "supply": {"commodity"}, "trends": _ALL, "risk": _ALL,
+    "cot": {"commodity", "fx", "index"},
+    "contracts": {"equity"}, "buzz": {"equity", "etf", "crypto"},
+    "fda": {"equity"}, "regulations": {"equity"}, "github": {"equity", "etf", "crypto"},
+    "trials": {"equity"}, "peers": {"equity", "etf"},
+    "governance": {"crypto", "chain", "protocol"}, "funding": {"crypto"},
+    "constituents": {"index"}, "carry": {"fx"}, "weather": {"commodity"},
+    "gtrends": _ALL,
+    "co2": {"country"}, "military": {"country"}, "health": {"country"},
+    "market": {"country"}, "corruption": {"country"},
+    "lobbying": {"equity"}, "hiring": {"equity"}, "shortvol": {"equity", "etf"},
+    "cryptovol": {"crypto"}, "cotfin": {"index", "fx"},
+    "trends": _ALL, "risk": _ALL,
 }
 # Functions that run with no target loaded; value = kinds they're *also* relevant
 # to when something is loaded.
 GLOBAL_APPLIES = {
     "hours": _ALL, "watch": _ALL, "export": _ALL, "convert": _ALL, "screen": _ALL,
+    "predictions": _ALL, "ipos": {"equity", "etf"},
+    "holidays": {"country", "macro", "equity", "etf", "index", "fx", "commodity", "exchange"},
+    "bigmac": {"fx"},
     "yields": {"macro", "equity", "etf", "index", "fx"},
+    "usdebt": {"macro", "country"},
+    "refrates": {"macro", "equity", "etf", "index", "fx"},
+    "auctions": {"macro", "index", "fx"},
+    "budget": {"macro", "country"},
+    "recession": {"macro", "equity", "etf", "index", "fx"},
+    "stress": {"macro", "equity", "etf", "index"},
     "sectors": {"equity", "etf", "index"}, "indices": {"equity", "etf", "index"},
     "commodities": {"commodity"}, "forex": {"fx"},
     "coins": {"crypto", "chain"}, "dominance": {"crypto", "chain"},
     "fear": {"crypto", "chain"}, "protocols": {"crypto", "chain"},
     "stablecoins": {"crypto", "chain"},
+    "trending": {"crypto", "chain"}, "onchain": {"crypto", "chain"},
+    "pools": {"crypto", "chain"}, "dexs": {"crypto", "chain"},
+    "fees": {"crypto", "chain", "protocol"}, "chains": {"crypto", "chain"},
+    "hacks": {"crypto", "chain"}, "treasuries": {"crypto", "chain"},
+    "congress": {"equity", "etf", "index"},
+    "disasters": {"macro", "equity", "etf", "index", "country", "commodity"},
+    "politics": {"macro", "equity", "etf", "index", "fx", "country"},
+    "forecasts": _ALL,
 }
 _APPLIES_ALL = {**APPLIES, **GLOBAL_APPLIES}
 _GLOBAL_FUNCS = set(GLOBAL_APPLIES)
@@ -97,7 +155,7 @@ def _category(text: str) -> str:
         return "screen"
     if last in CONNECTORS:
         return "subject"
-    if last == "convert":
+    if last in ("convert", "predictions", "forecasts"):
         return "none"
     return "verb"
 
@@ -106,7 +164,8 @@ def _alias_subjects(prefix: str):
     from src.data.macro import MACRO_SERIES
     from src.verbs import SPECIAL_SUBJECTS
     from src.data.worldbank import COUNTRIES
-    from src.data.defillama import CHAINS
+    from src.data.defillama import CHAINS, PROTOCOLS, STABLECOINS
+    from src.data.calendars import EXCHANGES
     p = prefix.upper()
     out = []
     for k in MACRO_SERIES:
@@ -117,6 +176,12 @@ def _alias_subjects(prefix: str):
         if k.startswith(p): out.append((k, "country"))
     for k in CHAINS:
         if k.startswith(p): out.append((k, "chain"))
+    for k in PROTOCOLS:
+        if k.startswith(p): out.append((k, "protocol"))
+    for k in STABLECOINS:
+        if k.startswith(p): out.append((k, "stablecoin"))
+    for k in EXCHANGES:
+        if k.startswith(p): out.append((k, "exchange"))
     seen, uniq = set(), []
     for sym, kind in out:
         if sym not in seen:
@@ -195,11 +260,45 @@ _TB_SPECS = {
     "none":    ("ARGS",     "100 USD EUR"),
 }
 
+# Priority order for the toolbar hint — most useful first, so the handful we show
+# for a given target are the ones you'd actually reach for.
+_VERB_ORDER = [
+    "price", "chart", "financials", "earnings", "compare", "returns", "stats", "corr",
+    "spread", "profile", "dividends", "holders", "analysts", "insiders", "filings",
+    "calendar", "short", "options", "ftd", "cot", "cotfin", "contracts", "fda",
+    "regulations", "github", "trials", "peers", "lobbying", "hiring", "shortvol",
+    "buzz", "sentiment", "splits", "seasonality", "holdings", "news",
+    "governance", "funding", "cryptovol", "constituents",
+    "gdp", "inflation", "trade", "debt", "unemployment", "population", "reserves",
+    "co2", "military", "health", "corruption", "market",
+    "usdebt", "budget", "recession", "carry", "tvl", "supply", "trends", "gtrends", "risk",
+    "yields", "refrates", "auctions", "stress", "ipos", "bigmac", "holidays", "weather",
+    "sectors", "indices", "commodities", "forex",
+    "coins", "trending", "onchain", "pools", "dexs", "fees", "chains", "hacks",
+    "treasuries", "dominance", "fear", "protocols", "stablecoins",
+    "congress", "disasters", "politics", "predictions", "forecasts",
+    "screen", "watch", "convert", "hours", "export",
+]
+
+
+def _verb_hint(loaded_kinds: set) -> str:
+    """The functions that apply to what's loaded, in priority order — this is what
+    makes the bar target-aware (no `financials` on a country, no `gdp` on a stock)."""
+    applicable = [v for v in _VERB_ORDER if _func_applies(v, loaded_kinds)]
+    shown = applicable[:6]
+    tail = " …" if len(applicable) > len(shown) else ""
+    return " · ".join(shown) + tail + "   or  vs <target>"
+
 
 def toolbar_fragments(text: str):
     """Styled bottom-bar fragments: the loaded set, what's expected next, examples."""
     from src.context import ctx
-    label, eg = _TB_SPECS.get(_category(text), ("", ""))
+    cat = _category(text)
+    label, eg = _TB_SPECS.get(cat, ("", ""))
+    # When a function is expected and a target is loaded, tailor the examples to
+    # the functions that actually apply to that target.
+    if cat == "verb" and ctx.loaded:
+        eg = _verb_hint({s.kind for s in ctx.subjects})
     frags = [("class:tb.pad", " ")]
     if ctx.loaded:
         frags.append(("class:tb.loaded", f" {ctx.prompt_label} "))

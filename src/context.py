@@ -24,7 +24,8 @@ MODEL = {
 
 _KIND_TAG = {"macro": "FRED", "crypto": "crypto", "index": "index",
              "commodity": "commodity", "fx": "FX", "country": "country",
-             "etf": "ETF", "chain": "chain", "protocol": "protocol"}
+             "etf": "ETF", "chain": "chain", "protocol": "DeFi protocol",
+             "stablecoin": "stablecoin", "exchange": "exchange", "topic": "topic"}
 
 # Kinds that have price/chart history through a yfinance-style symbol.
 _PRICED = {"equity", "etf", "crypto", "index", "commodity", "fx"}

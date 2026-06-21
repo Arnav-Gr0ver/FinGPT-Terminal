@@ -102,12 +102,12 @@ def get_prediction_markets(topic: str = "") -> str:
             f"Polymarket — Active Prediction Markets{' (' + topic.title() + ')' if topic else ''}",
             "Source: Polymarket Gamma API",
             "",
-            f"  {'Question':<52} {'Yes':>6} {'No':>6} {'Volume':>12}",
-            "  " + "─" * 80,
+            f"  {'Question':<44} {'Yes':>5} {'No':>5} {'Volume':>10}",
+            "  " + "─" * 70,
         ]
 
         for m in markets:
-            question  = (m.get("question") or "")[:51]
+            question  = (m.get("question") or "")[:43]
             volume    = float(m.get("volume") or m.get("volumeNum") or 0)
             outcomes  = m.get("outcomes") or "[]"
             prices    = m.get("outcomePrices") or "[]"
@@ -140,12 +140,86 @@ def get_prediction_markets(topic: str = "") -> str:
                      else f"${volume/1e3:.0f}K" if volume >= 1000
                      else f"${volume:.0f}")
 
-            lines.append(f"  {question:<52} {yes_s:>6} {no_s:>6} {vol_s:>12}")
+            lines.append(f"  {question:<44} {yes_s:>5} {no_s:>5} {vol_s:>10}")
 
         lines += ["", "  Yes/No prices = implied probability of each outcome."]
         return "\n".join(lines)
     except Exception as e:
         return f"Could not fetch prediction markets: {e}"
+
+
+def get_politics() -> str:
+    """PredictIt — live odds on US political markets (elections, nominations, control
+    of Congress). Source: PredictIt public market data (no key)."""
+    try:
+        markets = requests.get("https://www.predictit.org/api/marketdata/all/",
+                               headers=HEADERS, timeout=15).json().get("markets", [])
+    except Exception as e:
+        return f"Could not fetch PredictIt markets: {e}"
+    if not markets:
+        return "No PredictIt markets available."
+
+    out = [
+        "PredictIt — US Political Markets",
+        "Source: PredictIt · price = implied probability (¢ = %)",
+        "",
+    ]
+    shown = 0
+    for m in markets[:14]:
+        contracts = m.get("contracts") or []
+        if not contracts:
+            continue
+        top = max(contracts, key=lambda c: c.get("lastTradePrice") or 0)
+        price = top.get("lastTradePrice")
+        if price is None:
+            continue
+        q = (m.get("name") or "")[:50]
+        lead = (top.get("name") or "Yes")[:18]
+        out.append(f"  {q}")
+        out.append(f"      ↳ {lead:<18} {price*100:.0f}%")
+        shown += 1
+        if shown >= 10:
+            break
+    if shown == 0:
+        return "No priced PredictIt markets right now."
+    return "\n".join(out)
+
+
+def get_forecasts(topic: str = "") -> str:
+    """Manifold — community probability forecasts on any question. Source: Manifold
+    Markets (no key). An optional topic filters by keyword."""
+    try:
+        if topic:
+            # No sort override → Manifold ranks by relevance to the term.
+            markets = requests.get("https://api.manifold.markets/v0/search-markets",
+                                   params={"term": topic, "filter": "open", "limit": 15},
+                                   headers=HEADERS, timeout=15).json()
+        else:
+            markets = requests.get("https://api.manifold.markets/v0/markets",
+                                   params={"limit": 60}, headers=HEADERS, timeout=15).json()
+            markets = [m for m in markets if not m.get("isResolved")]
+            markets.sort(key=lambda m: m.get("volume") or 0, reverse=True)
+    except Exception as e:
+        return f"Could not fetch forecasts: {e}"
+    if not markets:
+        return f"No Manifold markets found{' for ' + topic if topic else ''}."
+
+    out = [
+        "Manifold — Community Forecasts" + (f"  ›  {topic.title()}" if topic else ""),
+        "Source: Manifold Markets · probability + volume",
+        "",
+        f"  {'Prob':>5}  {'Volume':>9}  Question",
+        "  " + "─" * 60,
+    ]
+    for m in markets[:14]:
+        prob = m.get("probability")
+        if prob is None:
+            continue
+        vol = m.get("volume") or 0
+        vol_s = f"M${vol/1000:.0f}k" if vol >= 1000 else f"M${vol:.0f}"
+        q = (m.get("question") or "").replace("\n", " ")[:46]
+        out.append(f"  {prob*100:>4.0f}%  {vol_s:>9}  {q}")
+    return "\n".join(out)
 
 
 def get_vix() -> str:

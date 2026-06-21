@@ -146,6 +146,81 @@ def population(iso: str, name: str) -> str:
     return "\n".join(out)
 
 
+def reserves(iso: str, name: str) -> str:
+    """Total reserves (foreign exchange + gold), in current USD."""
+    r = _series(iso, "FI.RES.TOTL.CD", 8)
+    if not r:
+        return f"No reserves data for {name}."
+    out = [f"Total Reserves (FX + gold, USD) — {name}", "Source: World Bank", "",
+           f"  {'Year':<8} {'Reserves':>16}", "  " + "─" * 26]
+    peak = max(v for _, v in r) or 1
+    for yr, v in r:
+        bar = "█" * min(int(v / peak * 18), 18)
+        out.append(f"  {yr:<8} {_fmt_usd(v):>16}  {bar}")
+    return "\n".join(out)
+
+
+def co2(iso: str, name: str) -> str:
+    d = _series(iso, "EN.GHG.CO2.PC.CE.AR5", 8)
+    if not d:
+        return f"No CO₂ per-capita data for {name}."
+    out = [f"CO₂ Emissions (tonnes per capita) — {name}", "Source: World Bank", ""]
+    peak = max(v for _, v in d) or 1
+    for yr, v in d:
+        out.append(f"  {yr:<6} {v:>6.1f}  {'█' * min(int(v / peak * 24), 24)}")
+    return "\n".join(out)
+
+
+def military(iso: str, name: str) -> str:
+    d = _series(iso, "MS.MIL.XPND.GD.ZS", 8)
+    if not d:
+        return f"No military-spending data for {name}."
+    out = [f"Military Spending (% of GDP) — {name}", "Source: World Bank / SIPRI", ""]
+    for yr, v in d:
+        out.append(f"  {yr:<6} {v:>5.1f}%  {'█' * min(int(v * 4), 28)}")
+    return "\n".join(out)
+
+
+def health(iso: str, name: str) -> str:
+    le = _series(iso, "SP.DYN.LE00.IN", 6)
+    hx = dict(_series(iso, "SH.XPD.CHEX.GD.ZS", 6))     # health spend % GDP
+    if not le:
+        return f"No health data for {name}."
+    out = [f"Health — {name}", "Source: World Bank / WHO", "",
+           f"  {'Year':<8}{'Life exp.':>12}{'Health spend':>16}", "  " + "─" * 38]
+    for yr, v in le:
+        hs = hx.get(yr)
+        out.append(f"  {yr:<8}{v:>10.1f}y {(f'{hs:.1f}% GDP' if hs is not None else '—'):>16}")
+    return "\n".join(out)
+
+
+def corruption(iso: str, name: str) -> str:
+    """Worldwide Governance Indicators — Control of Corruption (−2.5 worst … +2.5 best)."""
+    cc = _series(iso, "CC.EST", 6)
+    rl = dict(_series(iso, "RL.EST", 6))                # rule of law
+    if not cc:
+        return f"No governance data for {name}."
+    out = [f"Governance — {name}", "Source: World Bank WGI", "",
+           f"  {'Year':<8}{'Corruption ctrl':>16}{'Rule of law':>14}", "  " + "─" * 40]
+    for yr, v in cc:
+        r = rl.get(yr)
+        out.append(f"  {yr:<8}{v:>+15.2f}{(f'{r:+.2f}' if r is not None else '—'):>14}")
+    out += ["", "  Scale −2.5 (weak) … +2.5 (strong)."]
+    return "\n".join(out)
+
+
+# Country → benchmark equity index (Yahoo symbol, display name) for `market`.
+COUNTRY_INDEX = {
+    "US": ("^GSPC", "S&P 500"), "CN": ("000001.SS", "SSE Composite"),
+    "JP": ("^N225", "Nikkei 225"), "DE": ("^GDAXI", "DAX"), "GB": ("^FTSE", "FTSE 100"),
+    "IN": ("^BSESN", "BSE Sensex"), "FR": ("^FCHI", "CAC 40"), "BR": ("^BVSP", "Ibovespa"),
+    "CA": ("^GSPTSE", "S&P/TSX"), "KR": ("^KS11", "KOSPI"), "MX": ("^MXX", "IPC Mexico"),
+    "AU": ("^AXJO", "ASX 200"), "CH": ("^SSMI", "SMI"), "IT": ("FTSEMIB.MI", "FTSE MIB"),
+    "ES": ("^IBEX", "IBEX 35"), "NL": ("^AEX", "AEX"), "HK": ("^HSI", "Hang Seng"),
+    "SG": ("^STI", "Straits Times"), "ZA": ("^J203.JO", "JSE Top 40"), "TR": ("XU100.IS", "BIST 100"),
+}
+
+
 def overview(iso: str, name: str) -> str:
     """The country `price` analogue — latest headline readings."""
     def latest(ind):

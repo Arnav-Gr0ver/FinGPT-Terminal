@@ -202,3 +202,119 @@ def get_global_dominance() -> str:
         return "\n".join(l for l in lines if l is not None)
     except Exception as e:
         return f"Could not fetch global crypto data: {e}"
+
+
+def get_trending() -> str:
+    """CoinGecko trending search — the coins users are looking up most right now."""
+    try:
+        data = _cg("/search/trending")
+    except Exception as e:
+        return f"Could not fetch trending coins: {e}"
+    coins = data.get("coins", [])
+    if not coins:
+        return "No trending data available."
+
+    lines = [
+        "Trending Coins  (most-searched on CoinGecko, last 24h)",
+        "Source: CoinGecko",
+        "",
+        f"  {'#':<3} {'Coin':<10} {'Name':<22} {'Price':>12} {'24h':>8} {'Rank':>6}",
+        "  " + "─" * 66,
+    ]
+    for i, c in enumerate(coins[:15], 1):
+        it    = c.get("item", {}) or {}
+        d     = it.get("data", {}) or {}
+        sym   = (it.get("symbol") or "?").upper()[:9]
+        name  = (it.get("name") or "")[:21]
+        price = d.get("price")
+        chg   = (d.get("price_change_percentage_24h") or {}).get("usd") if isinstance(d.get("price_change_percentage_24h"), dict) else None
+        rank  = it.get("market_cap_rank")
+        try:
+            price_s = (f"${float(price):,.4f}" if float(price) < 1 else f"${float(price):,.2f}") if price is not None else "—"
+        except (TypeError, ValueError):
+            price_s = "—"
+        chg_s  = f"{chg:+.1f}%" if isinstance(chg, (int, float)) else "—"
+        rank_s = f"#{rank}" if rank else "—"
+        lines.append(f"  {i:<3} {sym:<10} {name:<22} {price_s:>12} {chg_s:>8} {rank_s:>6}")
+    return "\n".join(lines)
+
+
+def get_treasuries(coin: str = "bitcoin") -> str:
+    """Public companies holding BTC/ETH on their balance sheet. Source: CoinGecko."""
+    coin = "ethereum" if coin.lower() in ("eth", "ethereum") else "bitcoin"
+    try:
+        j = _cg(f"/companies/public_treasury/{coin}")
+    except Exception as e:
+        return f"Could not fetch corporate treasuries: {e}"
+    companies = j.get("companies") or []
+    if not companies:
+        return "No corporate-treasury data available."
+    sym = "BTC" if coin == "bitcoin" else "ETH"
+    total = j.get("total_holdings") or 0
+    val = j.get("total_value_usd") or 0
+    out = [
+        f"Corporate {sym} Treasuries",
+        f"Source: CoinGecko · {total:,.0f} {sym} held · {_large(val)} total",
+        "",
+        f"  {'Company':<26}{'Holdings':>14}{'Value':>12}",
+        "  " + "─" * 54,
+    ]
+    for c in companies[:15]:
+        h = c.get("total_holdings") or 0
+        v = c.get("total_current_value_usd") or 0
+        out.append(f"  {str(c.get('name',''))[:25]:<26}{h:>12,.0f} {sym}{_large(v):>12}")
+    return "\n".join(out)
+
+
+def get_btc_network() -> str:
+    """Bitcoin network health — hashrate, difficulty, throughput, and current fee
+    market. Sources: blockchain.info (network stats) + mempool.space (fees)."""
+    from src.data.http import get_json
+    try:
+        s = get_json("https://api.blockchain.info/stats", timeout=15)
+    except Exception as e:
+        return f"Could not fetch Bitcoin network stats: {e}"
+
+    price   = s.get("market_price_usd")
+    hr_ghs  = s.get("hash_rate")            # GH/s
+    diff    = s.get("difficulty")
+    n_tx    = s.get("n_tx")                 # tx in last 24h
+    blk_min = s.get("minutes_between_blocks")
+    vol_usd = s.get("trade_volume_usd")
+    mined   = s.get("n_btc_mined")
+    hr_ehs  = (hr_ghs / 1e9) if isinstance(hr_ghs, (int, float)) else None
+
+    fees = None
+    try:
+        fees = get_json("https://mempool.space/api/v1/fees/recommended", timeout=10)
+    except Exception:
+        fees = None
+
+    w = 26
+    lines = [
+        "Bitcoin Network — On-Chain Health",
+        "Sources: blockchain.info · mempool.space",
+        "",
+    ]
+    if isinstance(price, (int, float)):
+        lines.append(f"  {'Price':<{w}} ${price:,.0f}")
+    if hr_ehs:
+        lines.append(f"  {'Hash rate':<{w}} {hr_ehs:,.0f} EH/s")
+    if isinstance(diff, (int, float)):
+        lines.append(f"  {'Difficulty':<{w}} {diff/1e12:,.1f} T")
+    if isinstance(blk_min, (int, float)):
+        lines.append(f"  {'Avg block time':<{w}} {blk_min:.1f} min")
+    if isinstance(n_tx, (int, float)):
+        lines.append(f"  {'Transactions (24h)':<{w}} {n_tx:,}")
+    if vol_usd:
+        lines.append(f"  {'Est. exchange volume':<{w}} {_large(vol_usd)}")
+    if fees:
+        lines += [
+            "",
+            "  Fee market (sat/vB):",
+            f"  {'Next block (fastest)':<{w}} {fees.get('fastestFee', '—')}",
+            f"  {'~30 min':<{w}} {fees.get('halfHourFee', '—')}",
+            f"  {'~1 hour':<{w}} {fees.get('hourFee', '—')}",
+            f"  {'Economy':<{w}} {fees.get('economyFee', '—')}",
+        ]
+    return "\n".join(lines)
