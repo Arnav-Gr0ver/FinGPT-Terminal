@@ -16,6 +16,7 @@ import shlex
 
 from src.context import ctx
 from src.display import print_error, print_help, console
+from src.capabilities import _func_applies, functions_for
 from src import verbs
 
 CONNECTORS = {"vs", "versus", "&", "and"}
@@ -23,6 +24,7 @@ CONNECTORS = {"vs", "versus", "&", "and"}
 # Per-subject verbs: run once per loaded subject.
 EACH = {
     "price":      verbs.v_price,
+    "metrics":    verbs.v_metrics,
     "financials": verbs.v_financials,
     "earnings":   verbs.v_earnings,
     "filings":    verbs.v_filings,
@@ -47,8 +49,18 @@ EACH = {
     "lobbying":   verbs.v_lobbying,
     "hiring":     verbs.v_hiring,
     "shortvol":   verbs.v_shortvol,
+    "litigation": verbs.v_litigation,
+    "campaigns":  verbs.v_campaigns,
+    "epa":        verbs.v_epa,
+    "mentions":   verbs.v_mentions,
+    "adoption":   verbs.v_adoption,
+    "players":    verbs.v_players,
+    "archive":    verbs.v_archive,
+    "stackoverflow": verbs.v_stackoverflow,
     "governance": verbs.v_governance,
     "funding":    verbs.v_funding,
+    "cex":        verbs.v_cex,
+    "dexpairs":   verbs.v_dexpairs,
     "cryptovol":  verbs.v_cryptovol,
     "cotfin":     verbs.v_cotfin,
     "constituents": verbs.v_constituents,
@@ -66,10 +78,13 @@ EACH = {
     "unemployment": verbs.v_unemployment,
     "population":  verbs.v_population,
     "reserves":   verbs.v_reserves,
+    "biodiversity": verbs.v_biodiversity,
     "co2":        verbs.v_co2,
     "military":   verbs.v_military,
     "health":     verbs.v_health,
     "corruption": verbs.v_corruption,
+    "imf":        verbs.v_imf,
+    "who":        verbs.v_who,
     "market":     verbs.v_market,
     "tvl":        verbs.v_tvl,
     "supply":     verbs.v_supply,
@@ -96,6 +111,9 @@ GLOBAL = {
     "auctions":  verbs.v_auctions,
     "budget":    verbs.v_budget,
     "recession": verbs.v_recession,
+    "credit":    verbs.v_credit,
+    "housing":   verbs.v_housing,
+    "soma":      verbs.v_soma,
     "stress":    verbs.v_stress,
     "ipos":      verbs.v_ipos,
     "holidays":  verbs.v_holidays,
@@ -114,6 +132,37 @@ GLOBAL = {
     "congress":  verbs.v_congress,
     "disasters": verbs.v_disasters,
     "politics":  verbs.v_politics,
+    "hazards":   verbs.v_hazards,
+    "flights":   verbs.v_flights,
+    "exchanges": verbs.v_exchanges,
+    "categories": verbs.v_categories,
+    "industrial": verbs.v_industrial,
+    "mining":    verbs.v_mining,
+    "permits":   verbs.v_permits,
+    "claims":    verbs.v_claims,
+    "confidence": verbs.v_confidence,
+    "freight":   verbs.v_freight,
+    "shortages": verbs.v_shortages,
+    "water":     verbs.v_water,
+    "airports":  verbs.v_airports,
+    "alerts":    verbs.v_alerts,
+    "travel":    verbs.v_travel,
+    "ecb":       verbs.v_ecb,
+    "eurostat":  verbs.v_eurostat,
+    "spaceweather": verbs.v_spaceweather,
+    "hurricanes": verbs.v_hurricanes,
+    "tides":     verbs.v_tides,
+    "gridcarbon": verbs.v_gridcarbon,
+    "volcanoes": verbs.v_volcanoes,
+    "buoys":     verbs.v_buoys,
+    "neo":       verbs.v_neo,
+    "citypermits": verbs.v_citypermits,
+    "disease":   verbs.v_disease,
+    "medicare":  verbs.v_medicare,
+    "sports":    verbs.v_sports,
+    "btcchain":  verbs.v_btcchain,
+    "ethsupply": verbs.v_ethsupply,
+    "kfutures":  verbs.v_kfutures,
     "sectors":   verbs.v_sectors,
     "indices":   verbs.v_indices,
     "commodities": verbs.v_commodities,
@@ -140,8 +189,9 @@ def route(raw: str):
         raise SystemExit(0)
     if low == "/clear":
         console.clear(); return
-    if low in ("/help", "/h", "/?"):
-        print_help(); return
+    if low in ("/help", "/h", "/?") or low.startswith(("/help ", "/h ")):
+        parts = raw.split(None, 1)
+        print_help(parts[1] if len(parts) > 1 else None); return
     if low == "/login":
         from src.auth import run_login; run_login(); return
 
@@ -201,14 +251,11 @@ def _parse(tokens: list[str]):
             continue
 
         if low not in VERBS:
-            if i == 0 or verbs.is_subject_token(tok):
-                steps.append(("__load", tok))
-                i += 1
-                continue
-            from rich.markup import escape
-            print_error(f"Don't recognize '{escape(tok)}' — type a ticker (NVDA), a "
-                        f"macro series (CPI), a country (US), or a function.")
-            return None
+            # Could be a new subject to load OR a metric on the current target —
+            # resolved at execute time when we know what's loaded.
+            steps.append(("__token", tok))
+            i += 1
+            continue
 
         i += 1
         if low == "chart":
@@ -247,9 +294,17 @@ def _parse(tokens: list[str]):
 def _execute(steps):
     active = list(ctx.subjects)
     prev_verb = None
+    pending = []                                   # buffered consecutive metrics
+
+    def flush():
+        nonlocal pending
+        if pending and active:
+            _run_metrics(active, pending)
+        pending = []
 
     for name, arg in steps:
         if name == "__load":
+            flush()
             subj = verbs.load_subject(arg)
             if subj is None:
                 return
@@ -258,6 +313,7 @@ def _execute(steps):
             prev_verb = None
             continue
         if name == "__add":
+            flush()
             subj = verbs.load_subject(arg)
             if subj is None:
                 return
@@ -266,7 +322,19 @@ def _execute(steps):
             ctx.set_subjects(active)
             prev_verb = None
             continue
+        if name == "__token":
+            # A bare token after a target: a metric on it if it fits, else a new subject.
+            from src.data.metrics import is_metric
+            if active and is_metric(active[0].kind, arg):
+                pending.append(arg); prev_verb = "metric"; continue
+            flush()
+            subj = verbs.load_subject(arg)
+            if subj is None:
+                return
+            active = [subj]; ctx.set_subjects(active); prev_verb = None
+            continue
 
+        flush()
         # subject-independent verbs run regardless of what's loaded
         if name == "screen":
             verbs.v_screen(arg); prev_verb = name; continue
@@ -277,12 +345,25 @@ def _execute(steps):
         if name == "forecasts":
             verbs.v_forecasts(arg); prev_verb = name; continue
         if name in GLOBAL:
+            # A US-only board becomes the loaded country's own indicator where one
+            # exists — so `INDIA industrial` shows India, not the US, consistently.
+            from src.data.metrics import COUNTRY_METRICS
+            country = next((s for s in active if s.kind == "country"), None)
+            if country is not None and name in COUNTRY_METRICS:
+                _run_metrics([country], [name]); prev_verb = name; continue
+            if active and not _func_applies(name, {s.kind for s in active}):
+                _reject(name, active); prev_verb = name; continue
             GLOBAL[name](active); prev_verb = name; continue
 
         if not active:
             print_error("Load a subject first — type a ticker like [white]NVDA[/], "
                         "a series like [white]CPI[/], or a country like [white]US[/].")
             return
+
+        # Enforce target-awareness: a function only runs if it fits the loaded kind,
+        # so every target of a kind exposes exactly the same consistent set.
+        if name != "ask" and not _func_applies(name, {s.kind for s in active}):
+            _reject(name, active); prev_verb = name; continue
 
         if name == "compare":
             for p in arg:
@@ -306,6 +387,40 @@ def _execute(steps):
                     fn([s])
 
         prev_verb = name
+
+    flush()
+
+
+def _reject(name, active):
+    """Explain that a function doesn't apply to the loaded target, and point to the
+    consistent set that does — instead of silently running the wrong (US) data."""
+    s = active[0]
+    funcs = functions_for(s.kind)
+    extra = ""
+    if s.kind in ("equity", "etf", "country"):
+        from src.data.metrics import metric_aliases
+        ms = metric_aliases(s.kind)
+        if ms:
+            extra = f"\n  [#6b7280]+ {len(ms)} metric fields — e.g. {' · '.join(ms[:8])}[/]"
+    sample = " · ".join(f"[white]{f}[/]" for f in funcs[:12])
+    print_error(f"[white]{name}[/] doesn't apply to a {s.kind} target ([white]{s.symbol}[/]).\n"
+                f"  Try: {sample}{' …' if len(funcs) > 12 else ''}{extra}\n"
+                f"  [#6b7280]Same functions work for every {s.kind} — see /help {s.kind}.[/]")
+
+
+def _run_metrics(active, aliases):
+    """Render a combined metric card for each active subject that supports them."""
+    from src.data.metrics import card
+    from src.display import print_panel
+    from src.context import ctx as _ctx
+    from rich.markup import escape
+    for s in active:
+        res = card(s, aliases)
+        if res is None:
+            continue
+        title, body = res
+        _ctx.remember(title, body)
+        print_panel(escape(body), title=title)
 
 
 def _ask(arg, active):

@@ -69,11 +69,44 @@ menus. Combine targets with `vs` and set-aware functions act on all of them.
 Combine into a **set** with `vs` / `&` / `,` — e.g. `NVDA vs AMD vs INTC`. Type a
 new ticker any time to switch targets; the prompt shows what's loaded.
 
+### The consistency rule
+
+The terminal is organised as **instrument categories** (equity, country, crypto,
+index, commodity, FX, …) and **functions**. The one rule:
+
+> **A function works for *every* instrument in its category — or it isn't a
+> function on that category at all.**
+
+So `corruption` works for `US` *and* `INDIA`; `biodiversity`, `weather`, `gdp`,
+`industrial` all resolve to the **loaded** country (`INDIA industrial` shows
+India's industry, never the US's). Run something that doesn't fit and the
+terminal says so and lists what *does* apply — it never silently shows the wrong
+region. Type `/help <instrument>` (e.g. `/help country`) for a category's full,
+consistent set.
+
+Anything that takes **no instrument** — `coins`, `yields`, `auctions`,
+`sectors`, … — is a **standalone board** (`/help boards`), kept separate so the
+per-instrument sets stay clean.
+
+### Metrics — deep, consistent fields on any instrument
+
+Every equity exposes the **same ~65 fundamental fields**; every country the
+**same ~120 World-Bank indicators** — identical vocabulary on *any* member:
+
+```
+NVDA pe revenue netmargin fcf roe        # individual fields, chained
+NVDA metrics                             # the full fundamental dump
+INDIA growth gdppc inflation industrial  # the same idea for any country
+INDIA metrics                            # 100+ indicators, grouped
+NVDA vs AMD pe                           # a field across the whole set
+```
+
 ### Functions — what you can run
 
-A query is a target followed by a **pipeline of functions**, run left to right.
-Set-aware functions (`compare`, `corr`, `spread`, `returns`, `stats`, `chart`)
-use the whole set; the rest run once per target. Some need no target at all.
+A query is an instrument followed by a **pipeline of functions and metric
+fields**, run left to right. Set-aware functions (`compare`, `corr`, `spread`,
+`returns`, `stats`, `chart`) use the whole set; the rest run once per instrument.
+Standalone **boards** below take no instrument.
 
 | Group | Functions | |
 |-------|-----------|--|
@@ -84,20 +117,32 @@ use the whole set; the rest run once per target. Some need no target at all.
 | | `short` `options` `ftd` `sentiment` `splits` | short interest · option chain+IV · SEC fails-to-deliver · news tone · splits |
 | | `contracts` `buzz` `fda` `regulations` `github` | federal awards · Hacker News · FDA recalls · Federal Register · dev activity |
 | | `trials` `peers` `gtrends` `lobbying` `hiring` `shortvol` | clinical trials · co-watched peers · Google Trends · lobbying spend · open roles · FINRA short % |
-| **Country** | `gdp` `inflation` `trade` `debt` `unemployment` `population` `reserves` | World Bank macro · FX reserves |
-| | `co2` `military` `health` `corruption` `market` `profile` `holidays` | emissions · defense spend · life expectancy · governance index · benchmark index · snapshot · holidays |
-| **Crypto / DeFi** | `tvl` `holdings` `supply` `governance` `funding` `cryptovol` `fees` | chain/protocol TVL · ETF holdings · inventories · DAO votes · perp funding · DVOL implied vol · protocol fees |
-| **Signals** | `trends` `risk` `cot` `cotfin` `constituents` | Wikipedia attention · news tone + major-quake risk · CFTC positioning (legacy + financial) · index members |
-| **Markets** *(no target)* | `yields` `refrates` `auctions` `usdebt` `budget` `recession` `carry` `stress` `ipos` `bigmac` `weather` `sectors` `indices` `commodities` `forex` | Treasury curve · SOFR · auctions · US debt · deficit · yield-curve signal · FX carry · OFR stress · IPO pipeline · Big Mac PPP · growing-region weather · sectors · indices · commodity & FX boards |
-| | `fear` `dominance` `coins` `trending` `onchain` `pools` `dexs` `fees` `chains` `hacks` `treasuries` `protocols` `stablecoins` | crypto fear&greed · dominance · top coins · trending · BTC on-chain · DeFi yields · DEX volume · protocol fees · chains by TVL · exploits · corporate BTC/ETH · DeFi protocols · stablecoins |
-| | `predictions` `forecasts` `politics` `congress` `disasters` | Polymarket odds · Manifold forecasts · PredictIt politics · congressional trade filings · FEMA disasters |
+| **Country** *(every country)* | `gdp` `inflation` `trade` `debt` `unemployment` `population` `reserves` | World Bank macro · FX reserves |
+| | `co2` `military` `health` `corruption` `biodiversity` `imf` `who` `market` `weather` `profile` `holidays` | emissions · defense · life expectancy · governance · GBIF species · IMF outlook · WHO health · benchmark index · forecast · snapshot · holidays |
+| **Crypto / DeFi** | `tvl` `holdings` `supply` `governance` `funding` `cryptovol` `cex` `dexpairs` | chain/protocol TVL · ETF holdings · inventories · DAO votes · perp funding · DVOL · cross-exchange price · DEX pairs |
+| **Signals** | `trends` `risk` `cot` `cotfin` `constituents` `carry` | Wikipedia attention · news tone + quake risk · CFTC positioning · index members · FX carry |
 | **Find / utility** | `screen [name]` `watch` `hours` `export` `convert` | screener · watchlist · hours · session→md · FX |
 | **Ranges** | for `chart` | `5d 1mo 3mo 6mo ytd 1y 2y 5y 10y max` |
 
-Functions are **target-aware**: both the completion menu and the bottom hint bar
-only surface functions that fit what's loaded (no `coins` when you're on
-equities, no `financials` on a country, no `gdp` on a stock), and the terminal
-says so if you run one that doesn't apply.
+Functions are **strictly target-aware** — the menu only surfaces, and the parser
+only runs, functions that apply to the loaded instrument; anything else is
+rejected with the set that *does* apply. `/help <instrument>` lists each
+category's full, consistent set.
+
+### Boards — standalone dashboards *(no instrument)*
+
+Market/economy overviews that take no target, kept separate so the per-instrument
+sets stay consistent (`/help boards` for all):
+
+| Group | Boards |
+|-------|--------|
+| Rates & US macro | `yields` `refrates` `auctions` `usdebt` `budget` `recession` `credit` `housing` `soma` `stress` `ipos` |
+| Real economy | `industrial` `mining` `permits` `claims` `confidence` `freight` `shortages` `travel` `airports` `water` `alerts` |
+| Science & weather | `spaceweather` `hurricanes` `tides` `gridcarbon` `volcanoes` `buoys` `neo` `disasters` `hazards` `flights` |
+| Health & civic | `disease` `medicare` `citypermits` `sports` `congress` `politics` `ecb` `eurostat` |
+| Markets | `sectors` `indices` `commodities` `forex` `bigmac` |
+| Crypto | `coins` `dominance` `fear` `trending` `onchain` `pools` `dexs` `fees` `chains` `hacks` `treasuries` `exchanges` `categories` `protocols` `stablecoins` `btcchain` `ethsupply` `kfutures` |
+| Prediction markets | `predictions` `forecasts` |
 
 ---
 
@@ -110,9 +155,22 @@ transparently — you ask for `financials` or `tvl`, the terminal picks the sour
 |--------|------|
 | Yahoo Finance | Prices, fundamentals, earnings, dividends, holders, analysts, options, ETF holdings; indices, commodities, FX |
 | SEC EDGAR / XBRL | 10-K financials, filings, Form 4 insiders, fails-to-deliver, **S-1 IPO pipeline** |
-| FRED | Macro series, Treasury yields, inventories, federal budget, **yield-curve & FX-carry signals** |
+| FRED | Macro series, yields, inventories, budget, credit spreads, Case-Shiller, **industrial/mining/construction/labor/freight** |
+| openFDA | Drug/device/food recalls & enforcement · **active drug shortages** |
+| TSA · FAA · NOAA NWS · USGS Water | Air-travel throughput · airport delays · weather alerts · river flows |
+| NOAA SWPC · NHC · CO-OPS | Space-weather (geomagnetic storms) · hurricanes · port tide levels |
+| 28 crypto exchanges | Kraken, Coinbase, OKX, KuCoin, Bitstamp, Bitfinex, MEXC, HTX, Crypto.com, Gemini, Bitget, Upbit, bitFlyer, WhiteBIT, CoinEx, BitMart, Gate.io, HitBTC, AscendEX, BTSE, BingX, DigiFinex, Bitrue, Bitso, BigONE, WazirX, XT, WOO — cross-exchange price board |
+| Bithumb · Coincheck · Indodax | Regional exchange pricing (KRW / JPY / IDR) |
+| Blockstream · Blockchair · ultrasound.money · CoinLore · Kraken Futures | BTC chain explorers · ETH issuance · global stats · perp OI |
+| DEX Screener · GeckoTerminal · Hyperliquid | On-chain DEX pairs · perp funding (2nd venue) |
+| ECB · Eurostat · WHO · IMF | Euro-area rates/FX & stats · global health · WEO projections |
+| Docker Hub · Homebrew · Stack Exchange · Internet Archive · Wikidata | Image pulls · installs · dev mindshare · web-archive · company facts |
+| UK Carbon Intensity · open.er-api · fxratesapi · vatcomply · currency-api | GB grid carbon · FX fallbacks |
+| NASA (SWPC/NHC/CO-OPS/POWER/NeoWs) · USGS Volcanoes · NOAA NDBC · GBIF | Space weather · hurricanes · tides · agroclimate · asteroids · volcanoes · ocean buoys · biodiversity |
+| NYC/SF/Chicago/Austin/Seattle/Dallas open data · CDC · CMS | City building permits · respiratory surveillance · Medicare hospitals |
+| TheSportsDB | Major sports leagues (media-rights / betting context) |
 | U.S. Treasury (FiscalData) | National debt, average interest rate, auction results |
-| NY Fed | Money-market reference rates — SOFR, EFFR, OBFR, repo (TGCR/BGCR) |
+| NY Fed | Reference rates (SOFR/EFFR/OBFR/repo) · **SOMA / Fed balance sheet** |
 | Office of Financial Research | OFR Financial Stress Index (by category & region) |
 | CFTC | Commitments of Traders — weekly futures positioning (specs vs hedgers) |
 | USAspending.gov | Federal contract awards by company |
@@ -122,8 +180,9 @@ transparently — you ask for `financials` or `tvl`, the terminal picks the sour
 | Senate LDA · House Clerk | Lobbying spend · congressional trade-report filings |
 | FINRA | Daily off-exchange short-sale volume by ticker |
 | Greenhouse · Lever | Open job roles by department (hiring velocity) |
-| GitHub | Public-repo / open-source dev activity for a name |
-| World Bank · Our World in Data | Country GDP, inflation, trade, debt, reserves, CO₂, military, health, **corruption** |
+| CourtListener · OpenFEC · EPA ECHO | Court opinions · campaign finance · environmental compliance |
+| GitHub · npm/PyPI/crates · SteamSpy | Dev activity · package downloads · Steam players |
+| World Bank · Our World in Data · IMF | Country GDP, inflation, debt, reserves, CO₂, military, health, corruption, **WEO projections** |
 | Nager.Date · exchange_calendars | Public-holiday calendars · real exchange trading sessions |
 | Open-Meteo | Weather for key commodity growing / demand regions |
 | The Economist | Big Mac Index (burgernomics PPP) |
@@ -133,7 +192,7 @@ transparently — you ask for `financials` or `tvl`, the terminal picks the sour
 | CoinGecko · alternative.me | Crypto prices, dominance, trending, **corporate treasuries** · fear & greed |
 | blockchain.info · mempool.space | Bitcoin on-chain stats — hashrate, throughput, fee market |
 | Polymarket · Manifold · PredictIt | Prediction-market & community-forecast odds |
-| FEMA | US federal disaster declarations |
+| FEMA · NASA EONET · OpenSky | Disaster declarations · natural-hazard events · live air traffic |
 | Hacker News (Algolia) · Google Trends | Tech-community attention · search interest |
 | Wikipedia / Wikimedia | Page-view attention · profiles · index constituents |
 | USGS · GDELT | Earthquakes · global news tone |

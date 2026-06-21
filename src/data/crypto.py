@@ -121,6 +121,27 @@ def get_crypto_quote(symbol: str) -> str:
         return f"Could not fetch price for {sym}: {e}"
 
 
+def top_coins_rows(limit: int = 20):
+    """[(rank, sym, price, chg24, chg7, mktcap, vol), …] for a table view."""
+    coins = _cg("/coins/markets", params={
+        "vs_currency": "usd", "order": "market_cap_desc",
+        "per_page": limit, "page": 1, "sparkline": "false",
+        "price_change_percentage": "24h,7d"})
+    out = []
+    for c in coins:
+        price = c.get("current_price") or 0
+        out.append((
+            c.get("market_cap_rank") or "?",
+            (c.get("symbol") or "?").upper(),
+            f"${price:,.4f}" if price < 1 else f"${price:,.2f}",
+            f"{c.get('price_change_percentage_24h') or 0:+.2f}%",
+            f"{c.get('price_change_percentage_7d_in_currency') or 0:+.2f}%",
+            _large(c.get("market_cap") or 0),
+            _large(c.get("total_volume") or 0),
+        ))
+    return out
+
+
 def get_top_coins(limit: int = 20) -> str:
     try:
         coins = _cg("/coins/markets", params={
@@ -237,6 +258,40 @@ def get_trending() -> str:
         rank_s = f"#{rank}" if rank else "—"
         lines.append(f"  {i:<3} {sym:<10} {name:<22} {price_s:>12} {chg_s:>8} {rank_s:>6}")
     return "\n".join(lines)
+
+
+def get_exchanges(n: int = 12) -> str:
+    """Top crypto exchanges by 24h volume + trust score. Source: CoinGecko."""
+    try:
+        ex = _cg("/exchanges", params={"per_page": n, "page": 1})
+    except Exception as e:
+        return f"Could not fetch exchanges: {e}"
+    out = ["Top Crypto Exchanges by Volume", "Source: CoinGecko", "",
+           f"  {'#':<3}{'Exchange':<22}{'Trust':>7}{'24h Volume':>16}", "  " + "─" * 50]
+    for i, e in enumerate(ex[:n], 1):
+        vol_btc = e.get("trade_volume_24h_btc") or 0
+        out.append(f"  {i:<3}{str(e.get('name',''))[:21]:<22}{str(e.get('trust_score') or '—'):>7}"
+                   f"{vol_btc:>13,.0f} ₿")
+    return "\n".join(out)
+
+
+def get_categories(n: int = 15) -> str:
+    """Crypto sectors (AI, RWA, memes, L2…) ranked by 24h market-cap move.
+    Source: CoinGecko."""
+    try:
+        cats = _cg("/coins/categories")
+    except Exception as e:
+        return f"Could not fetch categories: {e}"
+    # Require real size so micro-cap noise doesn't dominate the movers list.
+    cats = [c for c in cats if (c.get("market_cap") or 0) > 2e8]
+    cats.sort(key=lambda c: c.get("market_cap_change_24h") or 0, reverse=True)
+    out = ["Crypto Sectors — 24h Performance", "Source: CoinGecko", "",
+           f"  {'Sector':<28}{'24h':>8}{'Market Cap':>14}", "  " + "─" * 52]
+    top = cats[:n // 2] + cats[-(n - n // 2):]
+    for c in top:
+        chg = c.get("market_cap_change_24h") or 0
+        out.append(f"  {str(c.get('name',''))[:27]:<28}{chg:>+7.1f}%{_large(c.get('market_cap')):>14}")
+    return "\n".join(out)
 
 
 def get_treasuries(coin: str = "bitcoin") -> str:

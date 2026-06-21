@@ -55,14 +55,15 @@ _kb = KeyBindings()
 
 @_kb.add("enter")
 def _(event):
-    """Enter fills in a highlighted completion (arrow/Tab-selected) instead of
-    submitting; with nothing highlighted, it runs the line as usual."""
+    """Enter accepts a highlighted completion (if any) and runs the line. Submitting
+    tears down the menu, so the dropdown always closes. Use Tab to accept a
+    completion *without* running, to keep typing the chain."""
     buff = event.current_buffer
     state = buff.complete_state
     if state is not None and state.current_completion is not None:
         buff.apply_completion(state.current_completion)
-    else:
-        buff.validate_and_handle()
+    buff.complete_state = None
+    buff.validate_and_handle()
 
 
 def _toolbar():
@@ -74,16 +75,27 @@ def _toolbar():
 
 
 def _prompt_message():
-    parts = [
-        ("class:prompt.time",    datetime.now().strftime("%H:%M:%S") + " "),
-        ("class:prompt.bracket", "<"),
-        ("class:prompt.app",     "FinR1 Terminal"),
-    ]
-    if ctx.prompt_label:
-        parts.append(("class:prompt.subject", f" {ctx.prompt_label}"))
-    parts.append(("class:prompt.bracket", ">"))
-    parts.append(("class:prompt.arrow", " "))
+    from src.display import KIND_COLORS
+    parts = [("fg:#e05c4b bold", "finr1")]
+    if ctx.subjects:
+        color = KIND_COLORS.get(ctx.subjects[0].kind, "#e8e8e8")
+        parts.append(("fg:#3a3a3a", "  "))
+        parts.append((f"fg:{color} bold", ctx.prompt_label or ""))
+    parts.append(("fg:#6b7280", "  ❯ "))
     return parts
+
+
+def _rprompt():
+    from datetime import time as _time
+    try:
+        from zoneinfo import ZoneInfo
+        et = datetime.now(ZoneInfo("America/New_York"))
+    except Exception:
+        et = datetime.now()
+    is_open = et.weekday() < 5 and _time(9, 30) <= et.time() < _time(16, 0)
+    dot = "fg:#2ecc71" if is_open else "fg:#6b7280"
+    label = "NYSE open" if is_open else "NYSE closed"
+    return [(dot, "● "), ("fg:#6b7280", f"{label}   {datetime.now().strftime('%H:%M')}")]
 
 
 def main():
@@ -98,12 +110,11 @@ def main():
         completer=GrammarCompleter(),
         complete_while_typing=True,
         key_bindings=_kb,
-        bottom_toolbar=_toolbar,
         style=PROMPT_STYLE,
     )
     while True:
         try:
-            raw = session.prompt(_prompt_message).strip()
+            raw = session.prompt(_prompt_message, rprompt=_rprompt).strip()
             if not raw:
                 continue
             route(raw)

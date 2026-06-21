@@ -23,7 +23,8 @@ SYSTEM = [
 
 # One-line meta shown beside each verb in the menu.
 VERB_META = {
-    "price": "quote / latest", "chart": "price over a range", "financials": "filed fundamentals",
+    "price": "quote / latest", "metrics": "all fundamental fields",
+    "chart": "price over a range", "financials": "filed fundamentals",
     "earnings": "beat/miss + next", "profile": "what it does", "dividends": "payout history",
     "holders": "ownership", "insiders": "SEC Form 4", "analysts": "targets",
     "filings": "10-K/10-Q/8-K", "news": "headlines", "calendar": "catalysts ahead",
@@ -67,76 +68,35 @@ VERB_META = {
     "treasuries": "corp BTC/ETH", "congress": "congress trades",
     "disasters": "FEMA declarations", "politics": "PredictIt odds",
     "forecasts": "Manifold odds",
+    "litigation": "court cases", "campaigns": "FEC donations",
+    "epa": "EPA compliance", "mentions": "filing mentions", "adoption": "pkg downloads",
+    "players": "Steam players", "imf": "IMF outlook",
+    "credit": "bond spreads", "housing": "Case-Shiller",
+    "soma": "Fed balance sheet", "hazards": "natural hazards",
+    "flights": "air traffic", "exchanges": "crypto exchanges",
+    "categories": "crypto sectors",
+    "industrial": "factory output", "mining": "mining/extraction",
+    "permits": "construction", "claims": "jobless claims",
+    "confidence": "consumer demand", "freight": "freight/logistics",
+    "shortages": "FDA drug shortages", "water": "river flows",
+    "airports": "FAA delays", "alerts": "weather alerts",
+    "travel": "TSA throughput",
+    "cex": "cross-exchange price", "dexpairs": "DEX pairs",
+    "who": "WHO health", "ecb": "ECB rates/FX",
+    "spaceweather": "geomagnetic storm", "hurricanes": "tropical cyclones",
+    "tides": "port water levels", "gridcarbon": "UK grid carbon",
+    "archive": "Wayback snapshots", "stackoverflow": "dev mindshare",
+    "eurostat": "euro-area stats", "volcanoes": "volcano alerts",
+    "buoys": "offshore buoys", "neo": "near-earth objects",
+    "biodiversity": "GBIF records", "citypermits": "city permits",
+    "disease": "CDC surveillance", "medicare": "CMS Medicare",
+    "sports": "sports leagues", "btcchain": "BTC explorers",
+    "ethsupply": "ETH issuance", "kfutures": "Kraken futures OI",
 }
 
 # Which target kinds each function is relevant for (used to filter suggestions).
-_ALL = {"equity", "etf", "crypto", "index", "commodity", "fx", "macro", "country",
-        "chain", "protocol", "stablecoin", "exchange", "topic"}
-_PRICED = {"equity", "etf", "crypto", "index", "commodity", "fx"}
-APPLIES = {
-    "price": _ALL, "chart": _PRICED | {"macro", "chain", "protocol"},
-    "news": _PRICED | {"country", "topic"},
-    "returns": _PRICED, "stats": _PRICED, "seasonality": _PRICED,
-    "compare": _PRICED, "corr": _PRICED, "spread": _PRICED,
-    "financials": {"equity"}, "earnings": {"equity"}, "profile": {"equity", "country"},
-    "dividends": {"equity"}, "holders": {"equity", "etf"}, "insiders": {"equity"},
-    "analysts": {"equity"}, "filings": {"equity"}, "calendar": {"equity"},
-    "short": {"equity"}, "options": {"equity"}, "splits": {"equity"},
-    "ftd": {"equity"},
-    "sentiment": {"equity", "etf", "crypto"}, "holdings": {"etf"},
-    "gdp": {"country"}, "inflation": {"country"}, "trade": {"country"},
-    "debt": {"country"}, "unemployment": {"country"}, "population": {"country"},
-    "reserves": {"country"},
-    "tvl": {"chain"}, "supply": {"commodity"}, "trends": _ALL, "risk": _ALL,
-    "cot": {"commodity", "fx", "index"},
-    "contracts": {"equity"}, "buzz": {"equity", "etf", "crypto"},
-    "fda": {"equity"}, "regulations": {"equity"}, "github": {"equity", "etf", "crypto"},
-    "trials": {"equity"}, "peers": {"equity", "etf"},
-    "governance": {"crypto", "chain", "protocol"}, "funding": {"crypto"},
-    "constituents": {"index"}, "carry": {"fx"}, "weather": {"commodity"},
-    "gtrends": _ALL,
-    "co2": {"country"}, "military": {"country"}, "health": {"country"},
-    "market": {"country"}, "corruption": {"country"},
-    "lobbying": {"equity"}, "hiring": {"equity"}, "shortvol": {"equity", "etf"},
-    "cryptovol": {"crypto"}, "cotfin": {"index", "fx"},
-    "trends": _ALL, "risk": _ALL,
-}
-# Functions that run with no target loaded; value = kinds they're *also* relevant
-# to when something is loaded.
-GLOBAL_APPLIES = {
-    "hours": _ALL, "watch": _ALL, "export": _ALL, "convert": _ALL, "screen": _ALL,
-    "predictions": _ALL, "ipos": {"equity", "etf"},
-    "holidays": {"country", "macro", "equity", "etf", "index", "fx", "commodity", "exchange"},
-    "bigmac": {"fx"},
-    "yields": {"macro", "equity", "etf", "index", "fx"},
-    "usdebt": {"macro", "country"},
-    "refrates": {"macro", "equity", "etf", "index", "fx"},
-    "auctions": {"macro", "index", "fx"},
-    "budget": {"macro", "country"},
-    "recession": {"macro", "equity", "etf", "index", "fx"},
-    "stress": {"macro", "equity", "etf", "index"},
-    "sectors": {"equity", "etf", "index"}, "indices": {"equity", "etf", "index"},
-    "commodities": {"commodity"}, "forex": {"fx"},
-    "coins": {"crypto", "chain"}, "dominance": {"crypto", "chain"},
-    "fear": {"crypto", "chain"}, "protocols": {"crypto", "chain"},
-    "stablecoins": {"crypto", "chain"},
-    "trending": {"crypto", "chain"}, "onchain": {"crypto", "chain"},
-    "pools": {"crypto", "chain"}, "dexs": {"crypto", "chain"},
-    "fees": {"crypto", "chain", "protocol"}, "chains": {"crypto", "chain"},
-    "hacks": {"crypto", "chain"}, "treasuries": {"crypto", "chain"},
-    "congress": {"equity", "etf", "index"},
-    "disasters": {"macro", "equity", "etf", "index", "country", "commodity"},
-    "politics": {"macro", "equity", "etf", "index", "fx", "country"},
-    "forecasts": _ALL,
-}
-_APPLIES_ALL = {**APPLIES, **GLOBAL_APPLIES}
-_GLOBAL_FUNCS = set(GLOBAL_APPLIES)
-
-
-def _func_applies(name: str, loaded_kinds: set) -> bool:
-    if not loaded_kinds:                       # nothing loaded → only global functions
-        return name in _GLOBAL_FUNCS
-    return bool(_APPLIES_ALL.get(name, _ALL) & loaded_kinds)
+from src.capabilities import (_ALL, _PRICED, APPLIES, GLOBAL_APPLIES,
+                              _APPLIES_ALL, _GLOBAL_FUNCS, _func_applies)
 
 
 def _category(text: str) -> str:
@@ -234,10 +194,19 @@ class GrammarCompleter(Completer):
 
         def verbs_():
             from src.context import ctx
+            from src.data.metrics import EQUITY_METRICS, COUNTRY_METRICS, metric_aliases
             loaded_kinds = {s.kind for s in ctx.subjects}
             for v in sorted(VERBS):
                 if v.startswith(wl) and _func_applies(v, loaded_kinds):
                     yield comp(v, VERB_META.get(v, "function"))
+            # Deep metric fields for the loaded target (only once you've typed a
+            # couple of letters, so the menu isn't flooded).
+            if wl and len(wl) >= 2:
+                reg = EQUITY_METRICS if loaded_kinds & {"equity", "etf"} else (
+                    COUNTRY_METRICS if "country" in loaded_kinds else {})
+                for alias in sorted(reg):
+                    if alias.startswith(wl) and alias not in VERBS:
+                        yield comp(alias, reg[alias][1])
             for c in ("vs", "&"):
                 if c.startswith(wl):
                     yield comp(c, "add a target")
@@ -263,20 +232,28 @@ _TB_SPECS = {
 # Priority order for the toolbar hint — most useful first, so the handful we show
 # for a given target are the ones you'd actually reach for.
 _VERB_ORDER = [
-    "price", "chart", "financials", "earnings", "compare", "returns", "stats", "corr",
+    "price", "metrics", "chart", "financials", "earnings", "compare", "returns", "stats", "corr",
     "spread", "profile", "dividends", "holders", "analysts", "insiders", "filings",
     "calendar", "short", "options", "ftd", "cot", "cotfin", "contracts", "fda",
     "regulations", "github", "trials", "peers", "lobbying", "hiring", "shortvol",
+    "litigation", "campaigns", "epa", "mentions", "adoption", "players",
     "buzz", "sentiment", "splits", "seasonality", "holdings", "news",
-    "governance", "funding", "cryptovol", "constituents",
+    "archive", "stackoverflow",
+    "governance", "funding", "cex", "dexpairs", "cryptovol", "constituents",
     "gdp", "inflation", "trade", "debt", "unemployment", "population", "reserves",
-    "co2", "military", "health", "corruption", "market",
-    "usdebt", "budget", "recession", "carry", "tvl", "supply", "trends", "gtrends", "risk",
-    "yields", "refrates", "auctions", "stress", "ipos", "bigmac", "holidays", "weather",
+    "co2", "military", "health", "corruption", "imf", "who", "market",
+    "usdebt", "budget", "recession", "credit", "housing", "soma", "carry",
+    "industrial", "mining", "permits", "claims", "confidence", "freight",
+    "tvl", "supply", "trends", "gtrends", "risk",
+    "yields", "refrates", "auctions", "stress", "ipos", "bigmac", "holidays",
+    "weather", "water", "alerts", "airports", "travel", "shortages",
+    "spaceweather", "hurricanes", "tides", "gridcarbon", "ecb", "eurostat",
+    "volcanoes", "buoys", "neo", "biodiversity", "citypermits", "disease", "medicare", "sports",
     "sectors", "indices", "commodities", "forex",
     "coins", "trending", "onchain", "pools", "dexs", "fees", "chains", "hacks",
-    "treasuries", "dominance", "fear", "protocols", "stablecoins",
-    "congress", "disasters", "politics", "predictions", "forecasts",
+    "treasuries", "exchanges", "categories", "btcchain", "ethsupply", "kfutures",
+    "dominance", "fear", "protocols", "stablecoins",
+    "congress", "disasters", "politics", "hazards", "flights", "predictions", "forecasts",
     "screen", "watch", "convert", "hours", "export",
 ]
 

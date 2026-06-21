@@ -58,6 +58,8 @@ def funding(symbol: str = "") -> str:
 
     if not rows:
         return "No funding data available right now."
+
+    hl = _hyperliquid_funding(symbol.upper()) if want else None
     out = [
         title, "Source: dYdX v4 · funding per 8h, OI in USD",
         "",
@@ -68,5 +70,22 @@ def funding(symbol: str = "") -> str:
         p = f"${price:,.4f}" if price < 10 else f"${price:,.0f}"
         oi_s = f"${oi/1e9:.2f}B" if oi >= 1e9 else f"${oi/1e6:.0f}M"
         out.append(f"  {label:<10}{p:>11}{chg:>+7.1f}%{fund:>+8.3f}%{apr:>+8.1f}%{oi_s:>11}")
+    if hl is not None:
+        out += ["", f"  Hyperliquid {symbol.upper()} funding (1h): {hl:+.4f}%  (≈{hl*24*365:+.0f}% APR)"]
     out += ["", "  Positive funding = longs pay shorts (crowded longs)."]
     return "\n".join(out)
+
+
+def _hyperliquid_funding(sym: str):
+    """Current 1h funding for a coin on Hyperliquid (a 2nd venue). Source: Hyperliquid."""
+    try:
+        import requests
+        r = requests.post("https://api.hyperliquid.xyz/info", json={"type": "metaAndAssetCtxs"},
+                          headers={"User-Agent": "FinR1/0.2"}, timeout=12)
+        meta, ctxs = r.json()
+        names = [a["name"] for a in meta.get("universe", [])]
+        if sym in names:
+            return float(ctxs[names.index(sym)].get("funding") or 0) * 100
+    except Exception:
+        pass
+    return None

@@ -6,6 +6,22 @@ precipitation outlook over a key growing or demand region."""
 from src.data.http import get_json
 
 
+def geocode(place: str):
+    """Resolve a place name to (lat, lon, label) via Open-Meteo geocoding (no key)."""
+    try:
+        j = get_json("https://geocoding-api.open-meteo.com/v1/search",
+                     params={"name": place, "count": 1, "language": "en"}, timeout=12)
+        r = (j.get("results") or [None])[0]
+        if r:
+            label = r.get("name", place)
+            if r.get("admin1"):
+                label = f"{r['name']}"
+            return (r["latitude"], r["longitude"], label)
+    except Exception:
+        pass
+    return None
+
+
 def region_forecast(lat: float, lon: float, region: str, commodity: str = "") -> str:
     try:
         j = get_json("https://api.open-meteo.com/v1/forecast", params={
@@ -51,4 +67,19 @@ def region_forecast(lat: float, lon: float, region: str, commodity: str = "") ->
         bar = "▮" * min(int((pr or 0) / 5), 8)
         out.append(f"  {wd:<12}{hi_s:>7}{lo_s:>7}{pr_s:>10} {bar}")
     out += ["", f"  7-day precipitation total: {total_rain:.1f}{pu}"]
+
+    # NASA POWER agroclimate cross-check (recent mean temperature).
+    try:
+        import datetime
+        end = datetime.date.today() - datetime.timedelta(days=2)
+        start = end - datetime.timedelta(days=7)
+        p = get_json("https://power.larc.nasa.gov/api/temporal/daily/point", params={
+            "parameters": "T2M", "community": "AG", "longitude": lon, "latitude": lat,
+            "start": start.strftime("%Y%m%d"), "end": end.strftime("%Y%m%d"), "format": "JSON"}, timeout=12)
+        t2m = (p.get("properties", {}).get("parameter", {}).get("T2M", {}) or {})
+        vals = [v for v in t2m.values() if isinstance(v, (int, float)) and v > -900]
+        if vals:
+            out.append(f"  NASA POWER 7-day mean temp: {sum(vals)/len(vals):.1f}°C  (agroclimate)")
+    except Exception:
+        pass
     return "\n".join(out)

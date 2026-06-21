@@ -448,6 +448,136 @@ def get_national_debt() -> str:
     return "\n".join(lines)
 
 
+def _indicator_panel(title: str, source: str, specs: list) -> str:
+    """Render a small dashboard of FRED series — latest reading vs a year ago.
+    specs: [(label, fred_id, unit)]."""
+    def yr_ago(rows):
+        target = datetime.strptime(rows[-1][0], "%Y-%m-%d") - timedelta(days=365)
+        for d, v in reversed(rows):
+            if datetime.strptime(d, "%Y-%m-%d") <= target:
+                return v
+        return None
+
+    lines = [title, f"Source: {source}", "",
+             f"  {'Indicator':<26}{'Latest':>13}{'Year ago':>13}", "  " + "─" * 54]
+    asof = ""
+    found = False
+    for label, fid, unit in specs:
+        rows = _fred(fid, limit=420)
+        if not rows:
+            continue
+        found = True
+        d, v = rows[-1]
+        asof = max(asof, d)
+        ya = yr_ago(rows)
+
+        def fmt(x):
+            if x is None:
+                return "—"
+            return (f"{x:,.0f}{unit}" if abs(x) >= 1000 else f"{x:,.1f}{unit}")
+        lines.append(f"  {label[:25]:<26}{fmt(v):>13}{fmt(ya):>13}")
+    if not found:
+        return f"{title} data is unavailable right now."
+    lines[1] = f"Source: {source} · latest {asof}"
+    return "\n".join(lines)
+
+
+def industrial_production() -> str:
+    return _indicator_panel(
+        "US Industrial Activity", "FRED / Federal Reserve",
+        [("Industrial production", "INDPRO", ""), ("Capacity utilization", "TCU", "%"),
+         ("Manufacturing output", "IPMAN", ""), ("Business inventories", "ISRATIO", "x")])
+
+
+def mining_activity() -> str:
+    return _indicator_panel(
+        "US Mining & Extraction", "FRED / Federal Reserve",
+        [("Mining production", "IPMINE", ""), ("Oil & gas extraction", "IPG211S", ""),
+         ("Oil & gas drilling", "IPN213111N", ""), ("Coal mining", "IPN2121S", "")])
+
+
+def building_permits() -> str:
+    return _indicator_panel(
+        "US Construction Activity", "FRED / Census Bureau",
+        [("Building permits", "PERMIT", "k"), ("Housing starts", "HOUST", "k"),
+         ("Construction spend ($M)", "TTLCONS", ""), ("New home sales", "HSN1F", "k")])
+
+
+def jobless_claims() -> str:
+    return _indicator_panel(
+        "US Labor — Jobless Claims", "FRED / Dept. of Labor",
+        [("Initial claims", "ICSA", ""), ("Continued claims", "CCSA", ""),
+         ("Unemployment rate", "UNRATE", "%"), ("Job openings (JOLTS)", "JTSJOL", "k")])
+
+
+def consumer_confidence() -> str:
+    return _indicator_panel(
+        "US Consumer Demand", "FRED / U.Michigan / Census",
+        [("U.Mich sentiment", "UMCSENT", ""), ("Retail sales ($M)", "RSAFS", ""),
+         ("Real disposable income", "DSPIC96", ""), ("Personal saving rate", "PSAVERT", "%")])
+
+
+def freight_activity() -> str:
+    return _indicator_panel(
+        "US Freight & Logistics", "FRED",
+        [("Truck tonnage index", "TRUCKD11", ""), ("Durable-goods orders ($M)", "DGORDER", ""),
+         ("Rail intermodal traffic", "RAILFRTINTERMODAL", ""), ("Wholesale inventories", "WHLSLRIRSA", "x")])
+
+
+def credit_spreads() -> str:
+    """Corporate-bond option-adjusted spreads (ICE BofA, via FRED) — investment-
+    grade and high-yield. Widening spreads = rising credit stress."""
+    ig = _fred("BAMLC0A0CM", limit=260)
+    hy = _fred("BAMLH0A0HYM2", limit=260)
+    if not ig:
+        return "Credit-spread data is unavailable right now."
+
+    def at(s, days):
+        if not s:
+            return None
+        target = datetime.strptime(s[-1][0], "%Y-%m-%d") - timedelta(days=days)
+        for d, v in reversed(s):
+            if datetime.strptime(d, "%Y-%m-%d") <= target:
+                return v
+        return None
+
+    out = ["US Corporate Credit Spreads  (option-adjusted, %)",
+           f"Source: FRED · ICE BofA · {ig[-1][0]}", "",
+           f"  {'':<16}{'Now':>8}{'1mo':>8}{'1yr':>8}", "  " + "─" * 40]
+    for label, s in (("Investment grade", ig), ("High yield", hy)):
+        if not s:
+            continue
+        m, y = at(s, 30), at(s, 365)
+        out.append(f"  {label:<16}{s[-1][1]:>7.2f}%{(f'{m:.2f}' if m else '—'):>8}{(f'{y:.2f}' if y else '—'):>8}")
+    out += ["", "  Wider = more credit stress; HY leads risk-off moves."]
+    return "\n".join(out)
+
+
+def home_prices() -> str:
+    """US home-price trend — S&P CoreLogic Case-Shiller National Index (FRED)."""
+    rows = _fred("CSUSHPINSA", limit=64)
+    if not rows:
+        return "Home-price data is unavailable right now."
+    latest_d, latest = rows[-1]
+
+    def chg(months):
+        if len(rows) > months:
+            old = rows[-1 - months][1]
+            return (latest / old - 1) * 100 if old else None
+        return None
+
+    out = ["US Home Prices — Case-Shiller National Index",
+           f"Source: FRED · S&P CoreLogic · index {latest:.1f} ({latest_d})", "",
+           f"  {'1-month':<12}{(f'{chg(1):+.1f}%' if chg(1) is not None else '—'):>8}",
+           f"  {'1-year':<12}{(f'{chg(12):+.1f}%' if chg(12) is not None else '—'):>8}",
+           f"  {'5-year':<12}{(f'{chg(60):+.1f}%' if chg(60) is not None else '—'):>8}",
+           "", "  Recent (index, seasonally-unadjusted):",
+           f"  {'Month':<10}{'Index':>10}", "  " + "─" * 24]
+    for d, v in rows[-8:][::-1]:
+        out.append(f"  {d:<10}{v:>10.1f}")
+    return "\n".join(out)
+
+
 def recession_signal() -> str:
     """Yield-curve recession signal — the 10y–2y and 10y–3m Treasury spreads.
     A sustained inversion (negative) has preceded every recent US recession.

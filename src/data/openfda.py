@@ -24,6 +24,44 @@ def _fmt_date(s):
     return f"{s[:4]}-{s[4:6]}-{s[6:8]}" if len(s) == 8 else (s or "—")
 
 
+def _fda_date(s):
+    s = str(s or "")
+    return f"{s[:4]}-{s[4:6]}-{s[6:8]}" if len(s) == 8 else (s or "—")
+
+
+def drug_shortages(company: str = "", n: int = 16) -> str:
+    """Active FDA drug-shortage list — a supply-chain signal for pharma and
+    hospital/distribution names. Filtered to a company if one is loaded.
+    Source: openFDA drug shortages."""
+    name = _clean(company) if company else ""
+    params = {"sort": "update_date:desc", "limit": n}
+    params["search"] = (f'company_name:"{name}"' if name else 'status:"Current"')
+    try:
+        j = get_json("https://api.fda.gov/drug/shortages.json", params=params, timeout=15)
+    except Exception:
+        if name:
+            return f"No current FDA drug shortages listed for {name}."
+        return "Could not fetch the FDA drug-shortage list."
+
+    results = j.get("results", [])
+    total = j.get("meta", {}).get("results", {}).get("total", len(results))
+    if not results:
+        return (f"No FDA drug-shortage records for {name}." if name
+                else "No active drug shortages listed right now.")
+    title = (f"FDA Drug Shortages — {name}" if name
+             else "FDA Drug Shortages — Current")
+    out = [title, f"Source: openFDA · {total:,} matching records", "",
+           f"  {'Updated':<12}{'Status':<10}Drug", "  " + "─" * 58]
+    for r in results[:n]:
+        upd = _fda_date(r.get("update_date"))
+        status = (r.get("status") or "")[:9]
+        drug = (r.get("generic_name") or r.get("proprietary_name") or "")[:34]
+        out.append(f"  {upd:<12}{status:<10}{drug}")
+    if not name:
+        out += ["", "  Load a pharma ticker then `shortages` to filter by company."]
+    return "\n".join(out)
+
+
 def fda_recalls(company: str, n: int = 12) -> str:
     name = _clean(company)
     results = []

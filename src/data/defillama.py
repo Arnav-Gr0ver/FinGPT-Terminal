@@ -425,6 +425,18 @@ def stablecoin_overview(sid: str, name: str) -> str:
     return "\n".join(out)
 
 
+def stablecoin_supply_series(sid: str, period_days: int = 365):
+    """[(values)] of a stablecoin's circulating supply for charting."""
+    try:
+        data = requests.get(f"https://stablecoins.llama.fi/stablecoincharts/all",
+                            params={"stablecoin": sid}, headers=HEAD, timeout=20).json()
+        vals = [(d.get("totalCirculating") or {}).get("peggedUSD") for d in data]
+        vals = [v for v in vals if v is not None][-period_days:]
+        return vals or None
+    except Exception:
+        return None
+
+
 def chain_tvl_series(slug: str, period_days: int = 365):
     """[(label, values)] of TVL for charting a chain subject."""
     try:
