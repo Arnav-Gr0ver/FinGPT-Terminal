@@ -213,9 +213,9 @@ _KIND_ACCENT = {
 
 # Ordered list of all 13 categories for the overview panel.
 _CATEGORIES = [
-    ("equity",     "#5aa7ff", "83k+",  "NVDA · AAPL · TSLA · GOOGL"),
-    ("etf",        "#5aa7ff", "8k+",   "SPY · QQQ · IWM · GLD · XLF"),
-    ("crypto",     "#f4a13c", "15k+",  "BTC · ETH · SOL · ADA · MATIC"),
+    ("equity",     "#5aa7ff", "∞",     "NVDA · AAPL · TSLA · GOOGL"),
+    ("etf",        "#5aa7ff", "∞",     "SPY · QQQ · IWM · GLD · XLF"),
+    ("crypto",     "#f4a13c", "∞",     "BTC · ETH · SOL · ADA · MATIC"),
     ("index",      "#b48ead", "21",    "SPX · NDX · VIX · FTSE · DAX · NIKKEI"),
     ("commodity",  "#d6b656", "20",    "GOLD · OIL · WHEAT · NATGAS · COPPER · BRENT"),
     ("fx",         "#4fc1c4", "16",    "EURUSD · USDJPY · DXY · GBPUSD · USDCAD"),
@@ -391,10 +391,185 @@ def _resolve_help_kind(symbol: str) -> str | None:
 
 
 
+# Per-function help: (description, source)
+_FUNC_HELP: dict[str, tuple[str, str]] = {
+    "price":       ("Latest quote — price, change, % change, volume, day range.",
+                    "Yahoo Finance · CoinGecko · Stooq"),
+    "chart":       ("Price chart over a time range. Append range: chart 1y · chart 6mo · chart 5d.",
+                    "Yahoo Finance · CoinGecko"),
+    "metrics":     ("All available fundamental metric fields in one table.",
+                    "Yahoo Finance · World Bank"),
+    "financials":  ("Income statement, balance sheet, cash flow — filed with the SEC.",
+                    "SEC EDGAR via Yahoo Finance"),
+    "earnings":    ("Historical EPS beat/miss and next earnings date.",
+                    "Yahoo Finance"),
+    "profile":     ("Business description, sector, employee count, website.",
+                    "Yahoo Finance · World Bank"),
+    "dividends":   ("Dividend payment history and current yield.",
+                    "Yahoo Finance"),
+    "holders":     ("Institutional and mutual fund ownership breakdown.",
+                    "Yahoo Finance"),
+    "insiders":    ("Recent insider buy/sell transactions from SEC Form 4.",
+                    "SEC EDGAR via Yahoo Finance"),
+    "analysts":    ("Analyst price targets and buy/sell/hold consensus.",
+                    "Yahoo Finance"),
+    "filings":     ("Recent SEC filings — 10-K, 10-Q, 8-K with links.",
+                    "SEC EDGAR"),
+    "news":        ("Recent news headlines.",
+                    "Google News · GDELT"),
+    "calendar":    ("Upcoming earnings dates, dividend ex-dates, and analyst events.",
+                    "Yahoo Finance"),
+    "compare":     ("Side-by-side price comparison. Load a set first: NVDA vs AMD compare.",
+                    "Yahoo Finance · CoinGecko"),
+    "returns":     ("Trailing returns — 1d, 1w, 1mo, 3mo, 1y, 3y, 5y.",
+                    "Yahoo Finance"),
+    "stats":       ("Volatility, beta, Sharpe ratio, max drawdown.",
+                    "Yahoo Finance"),
+    "corr":        ("Correlation matrix across a loaded set: NVDA vs AMD corr.",
+                    "Yahoo Finance"),
+    "spread":      ("Price ratio of two instruments over time: NVDA vs AMD spread.",
+                    "Yahoo Finance"),
+    "seasonality": ("Average return by calendar month — seasonal pattern.",
+                    "Yahoo Finance"),
+    "holdings":    ("ETF constituents — top positions and sector weights.",
+                    "Yahoo Finance"),
+    "short":       ("Short interest — shares short, days-to-cover, short float %.",
+                    "Yahoo Finance · FINRA"),
+    "options":     ("Options chain — calls and puts with strike, expiry, IV, volume.",
+                    "Yahoo Finance"),
+    "ftd":         ("Fails-to-deliver — shares that failed to settle (SEC).",
+                    "SEC"),
+    "cot":         ("CFTC Commitment of Traders — speculative positioning.",
+                    "CFTC"),
+    "cotfin":      ("CFTC Traders in Financial Futures (TFF) — positioning in financial instruments.",
+                    "CFTC"),
+    "sentiment":   ("News sentiment score — positive/negative ratio from recent headlines.",
+                    "GDELT"),
+    "buzz":        ("Hacker News mentions — developer and tech community attention.",
+                    "Hacker News"),
+    "gtrends":     ("Google search interest over time — retail attention proxy.",
+                    "Google Trends"),
+    "trends":      ("Combined attention signal: Google Trends + Reddit + Hacker News.",
+                    "Google Trends · Reddit"),
+    "risk":        ("News risk score — geopolitical, financial, and natural disaster signals.",
+                    "GDELT · USGS"),
+    "governance":  ("DAO governance — active proposals and recent votes.",
+                    "Snapshot.org"),
+    "funding":     ("Perpetual futures funding rate — long/short positioning signal.",
+                    "Hyperliquid · Deribit"),
+    "cex":         ("Cross-exchange spot price comparison across major centralized exchanges.",
+                    "CoinGecko"),
+    "dexpairs":    ("DEX trading pairs — liquidity and volume on decentralized exchanges.",
+                    "GeckoTerminal · DEX Screener"),
+    "cryptovol":   ("Implied volatility (DVOL) from crypto options markets.",
+                    "Deribit"),
+    "tvl":         ("Total value locked — DeFi chain TVL over time.",
+                    "DeFiLlama"),
+    "fees":        ("Protocol revenue and fees — annualized run rate.",
+                    "DeFiLlama"),
+    "constituents":("Index constituent members and weights.",
+                    "Wikipedia · index providers"),
+    "gdp":         ("GDP level and annual growth rate.",
+                    "World Bank · FRED"),
+    "inflation":   ("CPI inflation — headline and core, year-over-year.",
+                    "World Bank · FRED"),
+    "trade":       ("Exports, imports, and trade balance.",
+                    "World Bank · UN Comtrade"),
+    "debt":        ("Government debt as % of GDP.",
+                    "World Bank · IMF"),
+    "unemployment":("Unemployment rate over time.",
+                    "World Bank · ILO"),
+    "population":  ("Population level, growth rate, urban/rural split.",
+                    "World Bank"),
+    "reserves":    ("Foreign exchange reserve levels.",
+                    "World Bank"),
+    "co2":         ("CO₂ emissions — total and per capita.",
+                    "World Bank · Carbon Monitor"),
+    "military":    ("Military expenditure as % of GDP.",
+                    "SIPRI · World Bank"),
+    "health":      ("Life expectancy, infant mortality, healthcare spend.",
+                    "World Bank · WHO"),
+    "corruption":  ("Corruption Perceptions Index and World Bank governance indicators.",
+                    "Transparency International · World Bank"),
+    "biodiversity":("Species occurrence records.",
+                    "GBIF"),
+    "imf":         ("IMF World Economic Outlook projections — GDP and inflation forecasts.",
+                    "IMF"),
+    "who":         ("WHO health statistics — disease burden, vaccination rates, mortality.",
+                    "WHO"),
+    "market":      ("Country benchmark equity index performance.",
+                    "Yahoo Finance · Stooq"),
+    "carry":       ("FX carry signal — interest rate differential between two currencies.",
+                    "FRED · central banks"),
+    "bigmac":      ("The Economist Big Mac Index — currency over/undervaluation.",
+                    "The Economist"),
+    "supply":      ("Commodity supply — inventories, production, stockpiles.",
+                    "EIA · USDA"),
+    "weather":     ("Growing-region weather — temperature and precipitation for commodity areas.",
+                    "Open-Meteo · NOAA"),
+    "solar":       ("NASA solar and wind resource data by region.",
+                    "NASA POWER"),
+    "contracts":   ("Federal government contract awards.",
+                    "USAspending.gov"),
+    "fda":         ("FDA recalls and enforcement actions linked to the company.",
+                    "openFDA"),
+    "regulations": ("Federal Register rule-making activity linked to the company.",
+                    "Federal Register"),
+    "github":      ("GitHub repository activity — stars, commits, contributors.",
+                    "GitHub"),
+    "trials":      ("Clinical trials — active studies by sponsor.",
+                    "ClinicalTrials.gov"),
+    "lobbying":    ("Lobbying spend and issues from Senate LDA filings.",
+                    "Senate LDA"),
+    "hiring":      ("Open job roles — hiring trends by department.",
+                    "Greenhouse · Lever"),
+    "shortvol":    ("FINRA short volume as % of total volume.",
+                    "FINRA"),
+    "litigation":  ("Federal court cases from CourtListener.",
+                    "CourtListener"),
+    "campaigns":   ("Political donation history from FEC filings.",
+                    "OpenFEC"),
+    "epa":         ("EPA compliance and enforcement actions.",
+                    "EPA ECHO"),
+    "mentions":    ("Mentions of the ticker in SEC filings.",
+                    "SEC EDGAR"),
+    "adoption":    ("Package download counts — developer adoption signal.",
+                    "npm · PyPI · crates.io"),
+    "players":     ("Steam concurrent player counts.",
+                    "SteamSpy"),
+    "peers":       ("Co-viewed tickers — instruments frequently viewed alongside this one.",
+                    "Yahoo Finance"),
+    "archive":     ("Wayback Machine snapshots — historical web presence.",
+                    "Internet Archive"),
+    "stackoverflow":("Stack Overflow tag activity — developer mindshare.",
+                    "Stack Exchange API"),
+    "splits":      ("Stock split history.",
+                    "Yahoo Finance"),
+    "screen":      ("Screener — find tickers by preset: screen gainers · screen value · screen tech.",
+                    "Yahoo Finance"),
+    "find":        ("Search instruments by name or symbol across all categories.",
+                    "local index"),
+    "watch":       ("Add the loaded instrument to your session watchlist, or view it.",
+                    "session"),
+    "hours":       ("Current market trading hours and open/closed status.",
+                    "exchange calendars"),
+    "holidays":    ("Market holiday calendar for the exchange.",
+                    "exchange calendars"),
+    "export":      ("Export session history to a Markdown file.",
+                    "local"),
+    "convert":     ("Currency conversion. Usage: convert 100 USD EUR.",
+                    "Frankfurter"),
+}
+
+_KIND_ORDER = ["equity", "etf", "crypto", "index", "commodity", "fx",
+               "country", "macro", "chain", "protocol", "stablecoin", "exchange", "topic"]
+
+
 def print_help(topic: str = None):
     """
     /help                → overview (or loaded instrument's functions if one is active)
     /help <category>     → instruments in that category
+    /help <function>     → what a function does and what it applies to
     /help <symbol>       → all functions for that instrument
     """
     topic = (topic or "").strip()
@@ -426,10 +601,10 @@ def print_help(topic: str = None):
         accent      = _KIND_ACCENT.get(kind, C)
         instruments = _help_instruments(kind)
         _OPEN = {
-            "equity": ("83k+", "NVDA · AAPL · TSLA · GOOGL · MSFT · AMZN · META · JPM"),
-            "etf":    ("8k+",  "SPY · QQQ · IWM · GLD · XLF · ARKK · VTI · AGG"),
-            "crypto": ("15k+", "BTC · ETH · SOL · ADA · MATIC · AVAX · DOT · LINK"),
-            "topic":  ("∞",    'topic:lithium · topic:AI · topic:inflation · topic:"rate cuts"'),
+            "equity": ("∞",  "NVDA · AAPL · TSLA · GOOGL · MSFT · AMZN · META · JPM"),
+            "etf":    ("∞",  "SPY · QQQ · IWM · GLD · XLF · ARKK · VTI · AGG"),
+            "crypto": ("∞",  "BTC · ETH · SOL · ADA · MATIC · AVAX · DOT · LINK"),
+            "topic":  ("∞",  'topic:lithium · topic:AI · topic:inflation · topic:"rate cuts"'),
         }
         parts: list = []
         if instruments:
@@ -450,6 +625,33 @@ def print_help(topic: str = None):
                             border_style=accent, box=box.ROUNDED, padding=(1, 2), expand=False))
         console.print()
         return
+
+    # ── /help <function> → what it does, what it applies to ─────────────────
+    if topic:
+        from src.router import VERBS
+        if top_low in VERBS or top_low in _FUNC_HELP:
+            desc, source = _FUNC_HELP.get(top_low, (f"{top_low} function", ""))
+            from src.capabilities import _APPLIES_ALL
+            raw_kinds = _APPLIES_ALL.get(top_low, set())
+            kinds = [k for k in _KIND_ORDER if k in raw_kinds]
+            parts: list = [Text.from_markup(f"  [#c0c4cc]{desc}[/]")]
+            if kinds:
+                parts.append(Text(""))
+                kind_str = "  ".join(
+                    f"[bold {_KIND_ACCENT.get(k, '#9aa0a6')}]{k}[/]" for k in kinds
+                )
+                parts.append(Text.from_markup(f"  [#9aa0a6]applies to[/]   {kind_str}"))
+            if source:
+                parts.append(Text.from_markup(f"  [#9aa0a6]source    [/]   [#c0c4cc]{source}[/]"))
+            console.print()
+            console.print(Panel(
+                Group(*parts),
+                title=f"[bold {C}] {top_low} [/]",
+                title_align="left", border_style=C,
+                box=box.ROUNDED, padding=(1, 2), expand=False,
+            ))
+            console.print()
+            return
 
     # ── /help <symbol> or context-aware (/help with instrument loaded) ────────
     if topic:
@@ -535,41 +737,50 @@ def print_help(topic: str = None):
     # ── Overview (/help with nothing loaded) ─────────────────────────────────
     from src.capabilities import functions_for
 
-    grammar = Text.from_markup(
-        "  [#c0c4cc]Load an[/] [bold #e8e8e8]INSTRUMENT[/] [#c0c4cc]·  run[/] "
-        "[bold #e8e8e8]FUNCTIONS[/] [#c0c4cc]left to right.[/]\n\n"
-        "    [white]NVDA[/]  [#c0c4cc]price financials pe revenue roe[/]  [#9aa0a6]equity[/]"
-    )
+    _GROUPS = [
+        ("Markets",  "#5aa7ff", ["equity", "etf", "index", "commodity", "fx"]),
+        ("Economy",  "#46c890", ["country", "macro"]),
+        ("Crypto",   "#f4a13c", ["crypto", "chain", "protocol", "stablecoin"]),
+        ("Other",    "#c0c4cc", ["exchange", "topic"]),
+    ]
+    cat_lookup = {c[0]: c for c in _CATEGORIES}
 
     cat_table = Table(box=None, show_header=False, padding=(0, 1, 0, 0))
-    cat_table.add_column(no_wrap=True, min_width=12)
-    cat_table.add_column(no_wrap=True, min_width=6)
-    cat_table.add_column(style="#9aa0a6", no_wrap=True, min_width=6)
-    cat_table.add_column(style="#9aa0a6")
+    cat_table.add_column(no_wrap=True, min_width=10)  # group label
+    cat_table.add_column(no_wrap=True, min_width=12)  # category
+    cat_table.add_column(no_wrap=True, min_width=6)   # fn count
+    cat_table.add_column(no_wrap=True, min_width=4)   # sym count
+    cat_table.add_column(style="#9aa0a6")              # examples
 
-    for kind, accent, sym_count, examples in _CATEGORIES:
-        n_fn = len(functions_for(kind))
-        cat_table.add_row(
-            f"[bold {accent}]{kind}[/]",
-            f"[#c0c4cc]{n_fn} fn[/]",
-            sym_count,
-            examples,
-        )
+    for g_idx, (group_name, group_accent, group_cats) in enumerate(_GROUPS):
+        if g_idx > 0:
+            cat_table.add_row("", "", "", "", "")
+        for c_idx, cat_name in enumerate(group_cats):
+            if cat_name not in cat_lookup:
+                continue
+            _, accent, sym_count, examples = cat_lookup[cat_name]
+            n_fn = len(functions_for(cat_name))
+            label = f"[bold {group_accent}]{group_name}[/]" if c_idx == 0 else ""
+            cat_table.add_row(
+                label,
+                f"[bold {accent}]{cat_name}[/]",
+                f"[#c0c4cc]{n_fn} fn[/]",
+                f"[#9aa0a6]{sym_count}[/]",
+                examples,
+            )
 
     body = Group(
-        grammar, Text(""),
-        Rule("[#6b7280]categories — /help <category>[/]", style="#3a3a3a"),
-        Text(""),
         cat_table,
         Text(""),
         Rule(style="#3a3a3a"),
         Text.from_markup(
-            "  [#c0c4cc]/help <symbol>[/]   [#9aa0a6]functions for that instrument[/]\n"
-            "  [#c0c4cc]/clear  /exit[/]"),
+            "  [#c0c4cc]/help <category>[/]  [#6b7280]·[/]  "
+            "[#c0c4cc]/help <symbol>[/]  [#6b7280]·[/]  "
+            "[#c0c4cc]/help <function>[/]  [#6b7280]·[/]  "
+            "[#c0c4cc]/clear  /exit[/]"),
     )
     console.print()
     console.print(Panel(body, title=f"[bold {C}] FinR1 Terminal [/]", title_align="left",
-                        subtitle="[#6b7280] load an INSTRUMENT · run FUNCTIONS [/]",
                         border_style=C, box=box.ROUNDED, padding=(1, 2), expand=False))
     console.print()
 

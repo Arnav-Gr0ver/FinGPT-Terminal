@@ -132,6 +132,27 @@ class GrammarCompleter(Completer):
             # text on the right tells you what kind of token it is.
             return Completion(t, start_position=start, display=t, display_meta=meta)
 
+        # /help <topic> → complete categories, function names, instrument names.
+        tl = text.lower()
+        if tl.startswith("/help ") or tl.startswith("/h "):
+            pfx = word.lower()
+            _CATEGORIES = [
+                "equity", "etf", "crypto", "index", "commodity", "fx",
+                "country", "macro", "chain", "protocol", "stablecoin", "exchange", "topic",
+            ]
+            for cat_name in _CATEGORIES:
+                if cat_name.startswith(pfx):
+                    yield comp(cat_name, "category")
+            for v in sorted(VERBS):
+                if v.startswith(pfx):
+                    yield comp(v, VERB_META.get(v, "function"))
+            for sym, kind in _alias_subjects(word):
+                yield comp(sym, kind)
+            if word:
+                for sym, name in symbol_index.search(word, limit=6):
+                    yield comp(sym, name[:34])
+            return
+
         # Slash → system commands, anywhere.
         if word.startswith("/"):
             for cmd, meta in SYSTEM:

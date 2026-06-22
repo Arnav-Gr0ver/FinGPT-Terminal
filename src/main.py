@@ -53,15 +53,26 @@ PROMPT_STYLE = Style.from_dict({
 _kb = KeyBindings()
 
 
+@_kb.add("tab")
+def _(event):
+    """Tab: accept the highlighted completion and advance to next token."""
+    buff = event.current_buffer
+    if buff.complete_state is None:
+        buff.start_completion(select_first=False)
+        return
+    if buff.complete_state.current_completion is None:
+        buff.complete_next()
+    state = buff.complete_state
+    if state and state.current_completion is not None:
+        buff.apply_completion(state.current_completion)
+        buff.complete_state = None
+        buff.insert_text(" ")
+
+
 @_kb.add("enter")
 def _(event):
-    """Enter accepts a highlighted completion (if any) and runs the line. Submitting
-    tears down the menu, so the dropdown always closes. Use Tab to accept a
-    completion *without* running, to keep typing the chain."""
+    """Enter always runs the line, closing any open completion menu."""
     buff = event.current_buffer
-    state = buff.complete_state
-    if state is not None and state.current_completion is not None:
-        buff.apply_completion(state.current_completion)
     buff.complete_state = None
     buff.validate_and_handle()
 
