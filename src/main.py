@@ -76,11 +76,12 @@ def _toolbar():
 
 def _prompt_message():
     from src.display import KIND_COLORS
-    parts = [("fg:#e05c4b bold", "finr1")]
+    parts = [("fg:#555555", "<"), ("fg:#e05c4b bold", "FinR1 Terminal")]
     if ctx.subjects:
         color = KIND_COLORS.get(ctx.subjects[0].kind, "#e8e8e8")
-        parts.append(("fg:#3a3a3a", "  "))
+        parts.append(("fg:#6b7280", " "))
         parts.append((f"fg:{color} bold", ctx.prompt_label or ""))
+    parts.append(("fg:#555555", ">"))
     parts.append(("fg:#6b7280", "  ❯ "))
     return parts
 

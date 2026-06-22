@@ -119,6 +119,32 @@ SPECIAL_SUBJECTS = {
 }
 
 
+# Key growing / demand regions for commodity weather & solar functions.
+# (lat, lon, region_label) — used by v_weather and v_solar.
+_GROWING_REGIONS: dict[str, tuple[float, float, str]] = {
+    "WHEAT":      ( 47.0,  35.0, "Black Sea / Pontic Steppe"),
+    "CORN":       ( 41.5, -93.5, "US Corn Belt (Iowa)"),
+    "SOYBEAN":    (-15.0, -49.0, "Brazilian Cerrado"),
+    "COFFEE":     (  4.5, -74.5, "Colombian Highlands"),
+    "SUGAR":      (-22.0, -47.5, "São Paulo, Brazil"),
+    "COCOA":      (  6.8,  -5.5, "Ivory Coast"),
+    "COTTON":     ( 32.0,  74.0, "Punjab Region"),
+    "OJ":         ( 28.0, -81.5, "Florida Citrus Belt"),
+    "OIL":        ( 26.0,  50.5, "Arabian Gulf"),
+    "BRENT":      ( 56.0,   3.0, "North Sea"),
+    "NATGAS":     ( 40.5, -79.5, "Appalachian Basin"),
+    "COPPER":     (-23.5, -68.5, "Atacama Desert, Chile"),
+    "GOLD":       (-26.5,  27.5, "Witwatersrand, South Africa"),
+    "SILVER":     ( 25.0,-105.0, "Sierra Madre, Mexico"),
+    "ALUMINUM":   ( 10.0, -11.0, "Guinea Bauxite Belt"),
+    "PLATINUM":   (-26.8,  27.2, "Bushveld, South Africa"),
+    "PALLADIUM":  (-26.8,  27.2, "Bushveld, South Africa"),
+    "GASOLINE":   ( 29.7, -95.2, "US Gulf Coast Refining"),
+    "HEATINGOIL": ( 40.7, -74.0, "Northeast US Demand Hub"),
+    "URANIUM":    (-30.0,  29.0, "Karoo Basin, South Africa"),
+}
+
+
 def normalize_range(token: str) -> str | None:
     return RANGE_ALIASES.get((token or "").lower())
 
@@ -240,13 +266,59 @@ def resolve_subject(token: str) -> Subject | None:
     return Subject(symbol=sym, kind=kind, name=name, exchange=exch)
 
 
+def _instrument_search(query: str) -> list[tuple[str, str, str]]:
+    """Return (symbol, kind, name) for instruments whose symbol or name contains query."""
+    q_up = query.strip().upper()
+    q_lo = query.strip().lower()
+    if not q_lo:
+        return []
+    out, seen = [], set()
+
+    def _check(sym, kind, name):
+        if sym not in seen and (sym.startswith(q_up) or q_up in sym or q_lo in name.lower()):
+            seen.add(sym)
+            out.append((sym, kind, name))
+
+    for sym, (_, name, kind) in SPECIAL_SUBJECTS.items():
+        _check(sym, kind, name)
+    from src.data.worldbank import COUNTRIES
+    for sym, (_, name) in COUNTRIES.items():
+        _check(sym, "country", name)
+    from src.data.macro import MACRO_SERIES
+    for sym, (_, name, _) in MACRO_SERIES.items():
+        _check(sym, "macro", name)
+    from src.data.defillama import CHAINS, PROTOCOLS, STABLECOINS
+    for sym, (_, name) in CHAINS.items():
+        _check(sym, "chain", name)
+    for sym, (_, name) in PROTOCOLS.items():
+        _check(sym, "protocol", name)
+    for sym, (_, name) in STABLECOINS.items():
+        _check(sym, "stablecoin", name)
+    from src.data.calendars import EXCHANGES
+    for sym, (_, name, _) in EXCHANGES.items():
+        _check(sym, "exchange", name)
+    return out
+
+
 def load_subject(token: str) -> Subject | None:
-    """Resolve a subject and print the one-line confirmation (router owns the set)."""
+    """Resolve a subject and print the passport card (router owns the set)."""
     with _loading(f"loading {token.strip().upper()}"):
         subj = resolve_subject(token)
     if subj is None:
-        print_error(f"Couldn't load '{escape(token)}'. Check the symbol, name, "
-                    f"or prefix (chain: / country:).")
+        suggestions = _instrument_search(token)[:4]
+        if suggestions:
+            parts = "  ".join(
+                f"[white]{s}[/] [#6b7280]({k})[/]" for s, k, _ in suggestions
+            )
+            print_error(
+                f"Couldn't load [white]{escape(token)}[/].\n"
+                f"  Did you mean: {parts}?"
+            )
+        else:
+            print_error(
+                f"Couldn't load [white]{escape(token)}[/]. "
+                f"Check the symbol or use [white]find {escape(token)}[/] to search."
+            )
         return None
     _confirm(subj)
     return subj
@@ -257,15 +329,51 @@ peer_subject = resolve_subject
 
 
 def _confirm(subj: Subject):
-    from src.display import KIND_COLORS
-    accent = KIND_COLORS.get(subj.kind, C)
-    bits = subj.confirm_line().split(" · ")
-    name = escape(bits[1]) if len(bits) > 1 else ""
-    tag = escape(bits[2]) if len(bits) > 2 else escape(subj.kind)
-    console.print(
-        f"  [bold {accent}]●[/] [bold {WHITE}]{escape(subj.symbol)}[/]"
-        f"  [{MUTE}]{name}[/]   [{accent}]{tag}[/]"
-    )
+    from src.display import print_load_panel
+    print_load_panel(subj)
+
+
+def v_find(arg) -> None:
+    """Search all known instruments for a query term."""
+    query = " ".join(arg).strip() if isinstance(arg, list) else str(arg or "").strip()
+    if not query:
+        print_error("Usage: [white]find <term>[/]  e.g. [white]find india[/]  or  [white]find crude oil[/]")
+        return
+
+    results = _instrument_search(query)
+
+    # Also search equity symbols via symbol index if few results
+    if len(results) < 4:
+        from src.data import symbol_index
+        from src.display import KIND_COLORS
+        seen = {r[0] for r in results}
+        for sym, name in symbol_index.search(query, limit=6):
+            if sym not in seen:
+                seen.add(sym)
+                results.append((sym, "equity", name))
+
+    if not results:
+        print_error(
+            f"No instruments found matching [white]{escape(query)}[/]. "
+            f"Try a partial name (e.g. [white]find india[/]) or symbol prefix."
+        )
+        return
+
+    from src.display import make_table, console as _con, KIND_COLORS, C
+    from rich.text import Text as _Text
+    rows = []
+    for sym, kind, name in results[:20]:
+        accent = KIND_COLORS.get(kind, C)
+        rows.append((
+            _Text.from_markup(f"[bold {accent}]{sym}[/]"),
+            _Text.from_markup(f"[{accent}]{kind}[/]"),
+            name,
+        ))
+    t = make_table(["SYMBOL", "CATEGORY", "NAME"], rows)
+    _con.print()
+    _con.print(t)
+    _con.print(f"  [#6b7280]{len(results[:20])} match{'es' if len(results[:20]) != 1 else ''}"
+               f" — load with [white]<symbol>[/] · detailed help with [white]/help <symbol>[/][/]\n")
 
 
 def _equity_meta(sym: str) -> tuple[str, str, str]:
@@ -932,31 +1040,15 @@ def v_carry(subjects):
     _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  Carry")
 
 
-def v_recession(subjects):
-    from src.data.macro import recession_signal
-    with _loading("recession signal"):
-        body = recession_signal()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Recession Signal")
-
-
-_WEATHER_REGIONS = {
-    "WHEAT": (39.0, -98.0, "US Plains"), "CORN": (41.5, -93.5, "US Corn Belt"),
-    "SOYBEAN": (40.0, -89.0, "US Midwest"), "COFFEE": (-21.0, -47.0, "Brazil (Minas)"),
-    "SUGAR": (-21.0, -48.0, "Brazil (São Paulo)"), "COCOA": (6.8, -5.3, "Côte d'Ivoire"),
-    "COTTON": (33.0, -101.0, "US Cotton Belt"), "NATGAS": (40.0, -90.0, "US Midwest (HDD)"),
-    "OJ": (28.0, -81.5, "Florida"),
-}
-
-
 def v_weather(subjects):
     s = subjects[0]
     from src.data.weather import region_forecast, geocode
     # Commodity → its key growing/demand region; country → its capital/centroid.
     if s.kind == "commodity":
-        spec = _WEATHER_REGIONS.get(s.symbol)
+        spec = _GROWING_REGIONS.get(s.symbol)
         if not spec:
             print_error("weather covers key growing/demand regions for: " +
-                        ", ".join(_WEATHER_REGIONS) + " — or load a country.")
+                        ", ".join(_GROWING_REGIONS) + " — or load a country.")
             return
         lat, lon, region = spec
     elif s.kind == "country":
@@ -971,6 +1063,33 @@ def v_weather(subjects):
     with _loading(f"{s.symbol} weather"):
         body = region_forecast(lat, lon, region, "" if s.kind == "country" else s.name)
     _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  Weather")
+
+
+def v_solar(subjects):
+    """30-year solar & wind resource climatology — NASA POWER (no key).
+    Works for every country and every commodity growing region."""
+    s = subjects[0]
+    from src.data.weather import geocode
+    from src.data.nasa import solar_resource
+    if s.kind == "country":
+        loc = geocode(s.name)
+        if not loc:
+            print_error(f"Couldn't locate {s.name} for solar data.")
+            return
+        lat, lon, region = loc[0], loc[1], loc[2]
+    elif s.kind == "commodity":
+        spec = _GROWING_REGIONS.get(s.symbol)
+        if not spec:
+            print_error("solar covers key production regions for: " +
+                        ", ".join(_GROWING_REGIONS) + " — or load a country.")
+            return
+        lat, lon, region = spec
+    else:
+        print_error(f"solar works on countries and commodities (this is a {s.kind} subject).")
+        return
+    with _loading(f"{s.symbol} solar resource"):
+        body = solar_resource(lat, lon, region)
+    _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  Solar & Wind Resource")
 
 
 def v_gtrends(subjects):
@@ -1289,344 +1408,16 @@ def _company_or(subjects, fn, title):
     _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  {title}")
 
 
-def v_yields(subjects):
-    from src.data.macro import get_yield_curve
-    with _loading("treasury yields"):
-        body = get_yield_curve()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="US Treasury Yields")
-
-
-def v_fear(subjects):
-    from src.data.alt import get_fear_greed
-    with _loading("fear & greed"):
-        body = get_fear_greed()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Crypto Fear & Greed")
-
-
-def v_usdebt(subjects):
-    from src.data.macro import get_national_debt
-    with _loading("us national debt"):
-        body = get_national_debt()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="US National Debt")
-
-
-def v_refrates(subjects):
-    from src.data.rates import get_reference_rates
-    with _loading("reference rates"):
-        body = get_reference_rates()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Money-Market Reference Rates")
-
-
-def v_stress(subjects):
-    from src.data.risk import financial_stress
-    with _loading("financial stress index"):
-        body = financial_stress()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Financial Stress Index")
-
-
-def v_onchain(subjects):
-    from src.data.crypto import get_btc_network
-    with _loading("bitcoin network"):
-        body = get_btc_network()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Bitcoin Network")
-
-
-def v_trending(subjects):
-    from src.data.crypto import get_trending
-    with _loading("trending coins"):
-        body = get_trending()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Trending Coins")
-
-
-def v_pools(subjects):
-    from src.data.defillama import top_pools
-    with _loading("defi yield pools"):
-        body = top_pools()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="DeFi Yield Pools")
-
-
-def v_dexs(subjects):
-    from src.data.defillama import dex_volumes
-    with _loading("dex volumes"):
-        body = dex_volumes()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="DEX Volumes")
-
-
 def v_fees(subjects):
-    # Target-aware: a loaded protocol → that protocol's fees; else the top board.
-    proto = next((s for s in subjects if s.kind == "protocol"), None)
-    if proto:
-        from src.data.defillama import protocol_fee_detail
-        with _loading(f"{proto.symbol} fees"):
-            body = protocol_fee_detail(proto.ref, proto.name)
-        _show(f"[{WHITE}]{escape(body)}[/]", title=f"{proto.symbol}  ›  Fees")
+    """Fees & revenue for a DeFi protocol — works for every loaded protocol."""
+    s = subjects[0]
+    if s.kind != "protocol":
+        print_error("fees needs a protocol — e.g. [white]UNISWAP[/] or [white]protocol:aave[/].")
         return
-    from src.data.defillama import protocol_fees
-    with _loading("protocol fees"):
-        body = protocol_fees()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Protocol Fees")
-
-
-def v_chains(subjects):
-    from src.data.defillama import top_chains
-    with _loading("chains by tvl"):
-        body = top_chains()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Chains by TVL")
-
-
-def v_auctions(subjects):
-    from src.data.macro import treasury_auctions
-    with _loading("treasury auctions"):
-        body = treasury_auctions()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="US Treasury Auctions")
-
-
-def v_budget(subjects):
-    from src.data.macro import federal_budget
-    with _loading("federal budget"):
-        body = federal_budget()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="US Federal Budget")
-
-
-def v_hacks(subjects):
-    from src.data.defillama import defi_hacks
-    with _loading("crypto hacks"):
-        body = defi_hacks()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Crypto Hacks")
-
-
-def v_treasuries(subjects):
-    """Public-company crypto treasuries — ETH if an ETH subject is loaded, else BTC."""
-    coin = "ethereum" if any(s.symbol == "ETH" for s in subjects) else "bitcoin"
-    from src.data.crypto import get_treasuries
-    with _loading("corporate treasuries"):
-        body = get_treasuries(coin)
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Corporate Crypto Treasuries")
-
-
-def v_congress(subjects):
-    from src.data.govalt import congress_trades
-    with _loading("congressional trades"):
-        body = congress_trades()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Congressional Trades")
-
-
-def v_disasters(subjects):
-    from src.data.risk import disaster_declarations
-    with _loading("disaster declarations"):
-        body = disaster_declarations()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Disaster Declarations")
-
-
-def v_politics(subjects):
-    from src.data.alt import get_politics
-    with _loading("political markets"):
-        body = get_politics()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Political Markets")
-
-
-def v_exchanges(subjects):
-    from src.data.crypto import get_exchanges
-    with _loading("crypto exchanges"):
-        body = get_exchanges()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Crypto Exchanges")
-
-
-def v_categories(subjects):
-    from src.data.crypto import get_categories
-    with _loading("crypto sectors"):
-        body = get_categories()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Crypto Sectors")
-
-
-def v_credit(subjects):
-    from src.data.macro import credit_spreads
-    with _loading("credit spreads"):
-        body = credit_spreads()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Credit Spreads")
-
-
-def v_housing(subjects):
-    from src.data.macro import home_prices
-    with _loading("home prices"):
-        body = home_prices()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="US Home Prices")
-
-
-def v_soma(subjects):
-    from src.data.rates import soma_holdings
-    with _loading("fed balance sheet"):
-        body = soma_holdings()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Fed Balance Sheet")
-
-
-def v_hazards(subjects):
-    from src.data.geo import hazards
-    with _loading("natural hazards"):
-        body = hazards()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Natural Hazards")
-
-
-def v_flights(subjects):
-    from src.data.geo import flights
-    with _loading("global air traffic"):
-        body = flights()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Global Air Traffic")
-
-
-def _fred_dashboard(fn, label, title):
-    with _loading(label):
-        body = fn()
-    _show(f"[{WHITE}]{escape(body)}[/]", title=title)
-
-
-def v_industrial(subjects):
-    from src.data.macro import industrial_production
-    _fred_dashboard(industrial_production, "industrial activity", "Industrial Activity")
-
-
-def v_mining(subjects):
-    from src.data.macro import mining_activity
-    _fred_dashboard(mining_activity, "mining activity", "Mining & Extraction")
-
-
-def v_permits(subjects):
-    from src.data.macro import building_permits
-    _fred_dashboard(building_permits, "construction activity", "Construction Activity")
-
-
-def v_claims(subjects):
-    from src.data.macro import jobless_claims
-    _fred_dashboard(jobless_claims, "jobless claims", "Jobless Claims")
-
-
-def v_confidence(subjects):
-    from src.data.macro import consumer_confidence
-    _fred_dashboard(consumer_confidence, "consumer demand", "Consumer Demand")
-
-
-def v_freight(subjects):
-    from src.data.macro import freight_activity
-    _fred_dashboard(freight_activity, "freight activity", "Freight & Logistics")
-
-
-def v_shortages(subjects):
-    """FDA drug shortages — filtered to a loaded pharma company, else the current list."""
-    company = next((s.name for s in subjects if s.is_company), "")
-    from src.data.openfda import drug_shortages
-    with _loading("drug shortages"):
-        body = drug_shortages(company)
-    _show(f"[{WHITE}]{escape(body)}[/]", title="FDA Drug Shortages")
-
-
-def v_water(subjects):
-    from src.data.infra import river_flow
-    with _loading("river flows"):
-        body = river_flow()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="River Flows")
-
-
-def v_airports(subjects):
-    from src.data.infra import airport_delays
-    with _loading("airport status"):
-        body = airport_delays()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Airport Status")
-
-
-def v_alerts(subjects):
-    from src.data.infra import weather_alerts
-    with _loading("weather alerts"):
-        body = weather_alerts()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Weather Alerts")
-
-
-def v_travel(subjects):
-    from src.data.infra import tsa_travel
-    with _loading("tsa throughput"):
-        body = tsa_travel()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Air-Travel Demand")
-
-
-def v_ecb(subjects):
-    from src.data.intl import ecb_rates
-    with _loading("ecb rates"):
-        body = ecb_rates()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="ECB Rates & FX")
-
-
-def v_spaceweather(subjects):
-    from src.data.science import space_weather
-    with _loading("space weather"):
-        body = space_weather()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Space Weather")
-
-
-def v_hurricanes(subjects):
-    from src.data.science import hurricanes
-    with _loading("tropical cyclones"):
-        body = hurricanes()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Tropical Cyclones")
-
-
-def v_tides(subjects):
-    from src.data.science import port_tides
-    with _loading("port tides"):
-        body = port_tides()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Port Water Levels")
-
-
-def v_gridcarbon(subjects):
-    from src.data.science import grid_carbon
-    with _loading("grid carbon"):
-        body = grid_carbon()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Grid Carbon Intensity")
-
-
-def _global_verb(fn_path, label, title):
-    mod, fn = fn_path
-    with _loading(label):
-        body = getattr(__import__("src.data." + mod, fromlist=[fn]), fn)()
-    _show(f"[{WHITE}]{escape(body)}[/]", title=title)
-
-
-def v_btcchain(subjects):
-    _global_verb(("cryptox", "btc_chain"), "bitcoin chain", "Bitcoin Chain")
-
-
-def v_ethsupply(subjects):
-    _global_verb(("cryptox", "eth_issuance"), "eth supply", "Ethereum Supply")
-
-
-def v_kfutures(subjects):
-    _global_verb(("cryptox", "kraken_futures_oi"), "kraken futures", "Kraken Futures OI")
-
-
-def v_citypermits(subjects):
-    _global_verb(("citydata", "local_permits"), "city permits", "City Building Permits")
-
-
-def v_disease(subjects):
-    _global_verb(("citydata", "respiratory_surveillance"), "disease surveillance", "Respiratory Surveillance")
-
-
-def v_medicare(subjects):
-    _global_verb(("citydata", "medicare_overview"), "medicare data", "CMS Medicare")
-
-
-def v_eurostat(subjects):
-    _global_verb(("intl", "eurostat_indicators"), "eurostat", "Euro-Area Indicators")
-
-
-def v_volcanoes(subjects):
-    _global_verb(("science", "volcanoes"), "volcano alerts", "Volcanic Activity")
-
-
-def v_buoys(subjects):
-    _global_verb(("science", "ocean_buoys"), "ocean buoys", "Offshore Conditions")
-
-
-def v_neo(subjects):
-    _global_verb(("science", "near_earth_objects"), "near-earth objects", "Near-Earth Objects")
+    from src.data.defillama import protocol_fee_detail
+    with _loading(f"{s.symbol} fees"):
+        body = protocol_fee_detail(s.ref, s.name)
+    _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  Fees")
 
 
 def v_biodiversity(subjects):
@@ -1638,28 +1429,6 @@ def v_biodiversity(subjects):
     with _loading(f"{s.symbol} biodiversity"):
         body = biodiversity(s.ref, s.name)
     _show(f"[{WHITE}]{escape(body)}[/]", title=f"{s.symbol}  ›  Biodiversity")
-
-
-def v_sports(subjects):
-    _global_verb(("dev", "sports_leagues"), "sports leagues", "Sports Leagues")
-
-
-def v_forecasts(args):
-    """Manifold community forecasts (no target needed); an optional word filters
-    by topic — e.g. [white]forecasts recession[/]."""
-    topic = " ".join(args).strip() if args else ""
-    from src.data.alt import get_forecasts
-    with _loading("community forecasts"):
-        body = get_forecasts(topic)
-    title = "Forecasts" + (f"  ›  {topic.title()}" if topic else "")
-    _show(f"[{WHITE}]{escape(body)}[/]", title=title)
-
-
-def v_ipos(subjects):
-    from src.data.gov import recent_ipos
-    with _loading("ipo pipeline"):
-        body = recent_ipos()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="IPO Pipeline")
 
 
 def v_holidays(subjects):
@@ -1682,86 +1451,6 @@ def v_bigmac(subjects):
     with _loading("big mac index"):
         body = big_mac(fx)
     _show(f"[{WHITE}]{escape(body)}[/]", title="Big Mac Index")
-
-
-def v_predictions(args):
-    """Polymarket prediction markets (no target needed). An optional word filters
-    by topic — e.g. [white]predictions election[/]."""
-    topic = " ".join(args).strip() if args else ""
-    from src.data.alt import get_prediction_markets
-    with _loading("prediction markets"):
-        body = get_prediction_markets(topic)
-    title = "Prediction Markets" + (f"  ›  {topic.title()}" if topic else "")
-    _show(f"[{WHITE}]{escape(body)}[/]", title=title)
-
-
-def v_dominance(subjects):
-    from src.data.crypto import get_global_dominance
-    with _loading("market dominance"):
-        body = get_global_dominance()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Crypto Market Dominance")
-
-
-def v_coins(subjects):
-    from src.data.crypto import top_coins_rows
-    from src.display import make_table, delta
-    with _loading("top coins"):
-        rows = top_coins_rows(15)
-    if not rows:
-        print_error("Couldn't fetch top coins right now.")
-        return
-    tbl = make_table(
-        ["#", "Coin", "Price", "24h", "7d", "Market Cap", "Volume"],
-        [(f"[#6b7280]{r}[/]", f"[bold]{sym}[/]", price, delta(c24), delta(c7), mc, vol)
-         for r, sym, price, c24, c7, mc, vol in rows],
-        justify=["right", "left", "right", "right", "right", "right", "right"])
-    _show(tbl, title="Top Coins  ·  CoinGecko")
-
-
-def v_sectors(subjects):
-    from src.data.equities import get_sectors
-    with _loading("sector performance"):
-        body = get_sectors()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="US Sectors")
-
-
-def _market_table(kind: str, title: str):
-    from src.data.equities import perf_table
-    items = [(name, yf) for (yf, name, k) in SPECIAL_SUBJECTS.values() if k == kind]
-    # de-dup by yf symbol (some aliases share a symbol)
-    seen, uniq = set(), []
-    for name, yf in items:
-        if yf not in seen:
-            seen.add(yf); uniq.append((name, yf))
-    with _loading(title.lower()):
-        body = perf_table(title, uniq, "Yahoo Finance · 1-day / 1-month")
-    _show(f"[{WHITE}]{escape(body)}[/]", title=title)
-
-
-def v_indices(subjects):
-    _market_table("index", "World Indices")
-
-
-def v_commodities(subjects):
-    _market_table("commodity", "Commodities")
-
-
-def v_forex(subjects):
-    _market_table("fx", "Foreign Exchange")
-
-
-def v_protocols(subjects):
-    from src.data.defillama import top_protocols
-    with _loading("defi protocols"):
-        body = top_protocols()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="DeFi Protocols")
-
-
-def v_stablecoins(subjects):
-    from src.data.defillama import stablecoins
-    with _loading("stablecoins"):
-        body = stablecoins()
-    _show(f"[{WHITE}]{escape(body)}[/]", title="Stablecoins")
 
 
 # ── chart renderers ───────────────────────────────────────────────────────────

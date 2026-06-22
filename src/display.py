@@ -8,7 +8,6 @@ from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
 from rich.rule import Rule
-from rich.markdown import Markdown
 from rich.highlighter import RegexHighlighter
 from rich import box
 
@@ -54,6 +53,118 @@ class _FinHighlighter(RegexHighlighter):
 
 _HL = _FinHighlighter()
 
+# Priority functions shown in the load panel — ordered by "most useful first" per kind.
+_PRIORITY_FUNCS: dict[str, list[str]] = {
+    "equity":     ["price", "chart", "financials", "earnings", "news", "sentiment", "pe", "revenue"],
+    "etf":        ["price", "chart", "holdings", "holders", "returns", "sentiment", "news"],
+    "crypto":     ["price", "chart", "cex", "funding", "governance", "dexpairs", "sentiment"],
+    "index":      ["price", "chart", "returns", "cot", "constituents", "compare", "gtrends"],
+    "commodity":  ["price", "chart", "cot", "supply", "weather", "solar", "returns"],
+    "fx":         ["price", "chart", "carry", "cot", "bigmac", "returns", "gtrends"],
+    "country":    ["gdp", "inflation", "trade", "debt", "co2", "unemployment", "market", "news"],
+    "macro":      ["price", "chart", "gtrends", "trends", "risk"],
+    "chain":      ["tvl", "price", "chart", "dexpairs", "governance", "gtrends"],
+    "protocol":   ["fees", "price", "chart", "governance", "dexpairs", "gtrends"],
+    "stablecoin": ["price", "gtrends", "trends", "risk"],
+    "exchange":   ["hours", "holidays", "price", "gtrends", "trends"],
+    "topic":      ["news", "gtrends", "trends", "risk", "stackoverflow"],
+}
+
+# Grouped functions per category for /help <category> — ordered by workflow.
+_FUNC_GROUPS: dict[str, list[tuple[str, list[str]]]] = {
+    "equity": [
+        ("Price",        ["price", "chart", "returns", "stats", "seasonality"]),
+        ("Compare",      ["compare", "corr", "spread"]),
+        ("Fundamentals", ["financials", "earnings", "profile", "dividends", "holders", "insiders"]),
+        ("Analysts",     ["analysts", "filings", "calendar", "mentions"]),
+        ("Trading",      ["short", "options", "ftd", "splits", "shortvol"]),
+        ("Sentiment",    ["sentiment", "buzz", "gtrends", "trends", "risk"]),
+        ("Research",     ["trials", "fda", "regulations", "github", "contracts", "lobbying"]),
+        ("Alternative",  ["hiring", "litigation", "campaigns", "epa", "adoption", "players"]),
+        ("Reference",    ["peers", "archive", "stackoverflow", "news", "metrics"]),
+        ("Session",      ["find", "hours", "watch", "export", "convert", "screen", "holidays"]),
+    ],
+    "etf": [
+        ("Price",        ["price", "chart", "returns", "stats", "seasonality"]),
+        ("Compare",      ["compare", "corr", "spread"]),
+        ("Composition",  ["holdings", "holders"]),
+        ("Sentiment",    ["sentiment", "buzz", "github", "shortvol", "gtrends", "trends", "risk"]),
+        ("Reference",    ["peers", "news", "metrics", "stackoverflow"]),
+        ("Session",      ["find", "hours", "watch", "export", "convert", "screen", "holidays"]),
+    ],
+    "crypto": [
+        ("Market",        ["price", "chart", "returns", "stats", "seasonality"]),
+        ("Compare",       ["compare", "corr", "spread"]),
+        ("Cross-exchange",["cex"]),
+        ("DeFi",          ["funding", "governance", "dexpairs"]),
+        ("Sentiment",     ["sentiment", "buzz", "github", "cryptovol", "gtrends", "trends", "risk"]),
+        ("Reference",     ["news"]),
+        ("Session",       ["find", "hours", "watch", "export", "convert", "screen"]),
+    ],
+    "index": [
+        ("Market",      ["price", "chart", "returns", "stats", "seasonality"]),
+        ("Compare",     ["compare", "corr", "spread"]),
+        ("Positioning", ["cot", "cotfin", "constituents"]),
+        ("Signals",     ["gtrends", "trends", "risk", "news"]),
+        ("Session",     ["find", "hours", "watch", "export", "convert", "screen", "holidays"]),
+    ],
+    "commodity": [
+        ("Market",      ["price", "chart", "returns", "stats", "seasonality"]),
+        ("Compare",     ["compare", "corr", "spread"]),
+        ("Positioning", ["cot", "supply"]),
+        ("Physical",    ["weather", "solar"]),
+        ("Signals",     ["gtrends", "trends", "risk", "news"]),
+        ("Session",     ["find", "hours", "watch", "export", "convert", "screen", "holidays"]),
+    ],
+    "fx": [
+        ("Market",  ["price", "chart", "returns", "stats", "seasonality"]),
+        ("Compare", ["compare", "corr", "spread"]),
+        ("Macro",   ["cot", "cotfin", "carry", "bigmac"]),
+        ("Signals", ["gtrends", "trends", "risk", "news"]),
+        ("Session", ["find", "hours", "watch", "export", "convert", "screen", "holidays"]),
+    ],
+    "country": [
+        ("Macro",         ["gdp", "inflation", "trade", "debt"]),
+        ("Labor",         ["unemployment", "population"]),
+        ("External",      ["reserves"]),
+        ("Society",       ["co2", "military", "health", "corruption", "biodiversity"]),
+        ("International", ["imf", "who", "profile", "market", "solar", "weather", "holidays"]),
+        ("Attention",     ["gtrends", "trends", "risk", "news"]),
+        ("Reference",     ["metrics"]),
+        ("Session",       ["find", "hours", "watch", "export", "convert", "screen"]),
+    ],
+    "macro": [
+        ("Data",    ["price", "chart"]),
+        ("Signals", ["gtrends", "trends", "risk"]),
+        ("Session", ["find", "hours", "watch", "export", "convert", "screen", "holidays"]),
+    ],
+    "chain": [
+        ("DeFi",       ["tvl", "price", "chart", "dexpairs"]),
+        ("Governance", ["governance"]),
+        ("Signals",    ["gtrends", "trends", "risk"]),
+        ("Session",    ["find", "hours", "watch", "export", "convert", "screen"]),
+    ],
+    "protocol": [
+        ("DeFi",    ["fees", "price", "chart", "dexpairs", "governance"]),
+        ("Signals", ["gtrends", "trends", "risk"]),
+        ("Session", ["find", "hours", "watch", "export", "convert", "screen"]),
+    ],
+    "stablecoin": [
+        ("Market",  ["price"]),
+        ("Signals", ["gtrends", "trends", "risk"]),
+        ("Session", ["find", "hours", "watch", "export", "convert", "screen"]),
+    ],
+    "exchange": [
+        ("Calendar", ["price", "hours", "holidays"]),
+        ("Signals",  ["gtrends", "trends", "risk"]),
+        ("Session",  ["find", "watch", "export", "convert", "screen"]),
+    ],
+    "topic": [
+        ("Research", ["price", "news", "gtrends", "trends", "risk", "stackoverflow"]),
+        ("Session",  ["find", "hours", "watch", "export", "convert", "screen"]),
+    ],
+}
+
 # Per-target-kind accent colors — panels are tinted by what you've loaded.
 C = "#e05c4b"
 KIND_COLORS = {
@@ -91,67 +202,39 @@ BANNER = """\
 
 C = "#e05c4b"
 
-# Each section: (group, [(command, description)])
-_TARGETS = [
-    ("NVDA · apple · SPY",        "equity · company name · ETF"),
-    ("CPI · GDP · DGS10",         "FRED macro series"),
-    ("SPX · VIX · GOLD · EURUSD · BTC", "index · commodity · FX · crypto"),
-    ("US · CHINA · country:BR",   "country — World Bank macro"),
-    ("ETHEREUM · chain:arbitrum", "crypto chain — DeFiLlama TVL"),
-    ("AAVE · UNISWAP · USDT",     "DeFi protocol · stablecoin — DeFiLlama"),
-    ("NYSE · LSE · topic:lithium","exchange calendar · any research topic"),
-    ("NVDA vs AMD vs INTC",       "combine with vs / & / ,  →  a target set"),
-]
+# Accent color per category kind.
+_KIND_ACCENT = {
+    "equity": "#5aa7ff", "etf": "#5aa7ff",
+    "crypto": "#f4a13c", "chain": "#f4a13c", "protocol": "#f4a13c", "stablecoin": "#f4a13c",
+    "macro": "#46c890", "country": "#46c890",
+    "index": "#b48ead", "commodity": "#d6b656", "fx": "#4fc1c4",
+    "exchange": "#9aa0a6", "topic": "#9aa0a6",
+}
 
-_FUNCTIONS = [
-    ("Price",    [("price · chart <range>",          "quote · price history"),
-                  ("returns · stats · seasonality",  "trailing returns · risk · monthly")]),
-    ("Compare",  [("compare · corr · spread",        "side-by-side · correlation · ratio")]),
-    ("Company",  [("financials · earnings · profile","SEC 10-K figures · beat-miss · summary"),
-                  ("dividends · holders · insiders",  "payouts · ownership · Form 4"),
-                  ("analysts · filings · calendar",   "targets · filings · catalysts"),
-                  ("short · options · sentiment",     "short int · options+IV · news tone"),
-                  ("ftd · splits · contracts · buzz", "fails-to-deliver · splits · federal awards · HN"),
-                  ("fda · regulations · github",      "FDA recalls · Federal Register · dev activity"),
-                  ("trials · peers · gtrends",        "clinical trials · co-watched names · Google Trends"),
-                  ("lobbying · hiring · shortvol",    "LDA lobby spend · open roles · FINRA short %"),
-                  ("litigation · campaigns · epa",    "court cases · FEC donations · EPA compliance"),
-                  ("mentions · adoption · players",   "filing mentions · pkg downloads · Steam players"),
-                  ("archive · stackoverflow",         "Wayback snapshots · dev mindshare")]),
-    ("Country",  [("gdp · inflation · trade · debt",  "World Bank macro"),
-                  ("unemployment · population · reserves","labor force · population · FX reserves"),
-                  ("co2 · military · health · corruption","emissions · defense · life exp · governance"),
-                  ("imf · who · market · profile · holidays","IMF · WHO health · index · snapshot · holidays")]),
-    ("Crypto/DeFi",[("tvl · holdings · supply",       "chain TVL · ETF holdings · inventories"),
-                  ("governance · funding · cryptovol · fees","DAO votes · perp funding · DVOL · protocol fees"),
-                  ("cex · dexpairs · exchanges · categories","cross-exchange price · DEX pairs · venues · sectors"),
-                  ("btcchain · ethsupply · kfutures","BTC explorers · ETH issuance · Kraken futures OI")]),
-    ("Economy",  [("industrial · mining · permits","factory output · extraction · construction"),
-                  ("claims · confidence · freight","jobless claims · consumer demand · logistics"),
-                  ("travel · airports · water · alerts","TSA · FAA delays · river flows · weather alerts"),
-                  ("spaceweather · hurricanes · tides · gridcarbon","geomagnetic storms · cyclones · port tides · UK grid"),
-                  ("volcanoes · buoys · neo · biodiversity","USGS volcanoes · NOAA buoys · near-earth objects · GBIF"),
-                  ("citypermits · disease · medicare · sports","city permits · CDC surveillance · CMS hospitals · leagues"),
-                  ("shortages · ecb · eurostat",      "FDA drug shortages · ECB rates/FX · euro-area stats")]),
-    ("Signals",  [("trends · risk · cot · cotfin · constituents","attention · disruption · CFTC legacy+financial · members")]),
-    ("Markets",  [("yields · refrates · auctions · budget","Treasury curve · SOFR · auctions · deficit"),
-                  ("usdebt · stress · recession · credit","US debt · OFR stress · curve signal · bond spreads"),
-                  ("carry · housing · soma · ipos",   "FX carry · Case-Shiller · Fed B/S · IPO pipeline"),
-                  ("bigmac · weather · hazards · flights","PPP · weather · natural hazards · air traffic"),
-                  ("sectors · indices · commodities · forex","sectors · indices · commodity & FX boards"),
-                  ("predictions · forecasts · politics","Polymarket · Manifold · PredictIt"),
-                  ("congress · disasters · treasuries","congress trades · FEMA · corporate BTC/ETH"),
-                  ("fear · dominance · coins · trending","crypto F&G · dominance · top · trending"),
-                  ("onchain · pools · dexs · hacks","BTC net · yields · DEX vol · exploits"),
-                  ("chains · protocols · stablecoins","chains by TVL · protocols · stablecoins")]),
-    ("Find",     [("screen [name]",                   "gainers losers value tech… (bare = list)"),
-                  ("watch · hours · export · convert","watchlist · hours · session→md · FX")]),
+# Ordered list of all 13 categories for the overview panel.
+_CATEGORIES = [
+    ("equity",     "#5aa7ff", "83k+",  "NVDA · AAPL · TSLA · GOOGL"),
+    ("etf",        "#5aa7ff", "8k+",   "SPY · QQQ · IWM · GLD · XLF"),
+    ("crypto",     "#f4a13c", "15k+",  "BTC · ETH · SOL · ADA · MATIC"),
+    ("index",      "#b48ead", "21",    "SPX · NDX · VIX · FTSE · DAX · NIKKEI"),
+    ("commodity",  "#d6b656", "20",    "GOLD · OIL · WHEAT · NATGAS · COPPER · BRENT"),
+    ("fx",         "#4fc1c4", "16",    "EURUSD · USDJPY · DXY · GBPUSD · USDCAD"),
+    ("country",    "#46c890", "50",    "US · CN · JP · DE · UK · IN · FR · BR"),
+    ("macro",      "#46c890", "25",    "CPI · GDP · DGS10 · M2 · UNRATE · FEDFUNDS"),
+    ("chain",      "#f4a13c", "23",    "ETHEREUM · ARBITRUM · SOLANA · BASE · OPTIMISM"),
+    ("protocol",   "#f4a13c", "25",    "AAVE · UNISWAP · LIDO · CURVE · MAKER"),
+    ("stablecoin", "#f4a13c", "12",    "USDT · USDC · DAI · USDS · USDE · PYUSD"),
+    ("exchange",   "#9aa0a6", "14",    "NYSE · NASDAQ · LSE · JPX · TSE · HKEX"),
+    ("topic",      "#9aa0a6", "∞",     "topic:lithium · topic:AI · topic:inflation"),
 ]
 
 
 def print_banner():
+    from src.data.sources import SOURCES
+    from src.router import VERBS
+    n_sources = len(SOURCES)
+    n_funcs   = len(VERBS)
     console.print()
-    # Two-tone gradient down the wordmark.
     shades = ["#e05c4b", "#e06a4f", "#e57a52", "#ea8a56", "#ef9a5a", "#f0a85f"]
     lines = BANNER.split("\n")
     grad = Text()
@@ -162,195 +245,333 @@ def print_banner():
     console.print()
     console.print(
         f"  [bold #e8e8e8]An analyst in your terminal[/]   "
-        f"[#3a3a3a]·[/]   [#6b7280]grounded, key-less financial deep research[/]"
+        f"[#3a3a3a]·[/]   [#6b7280]grounded, key-less financial research[/]"
     )
     console.print(
-        f"  [#46c890]126[/][#6b7280] free no-key sources[/]   [#3a3a3a]·[/]   "
-        f"[#5aa7ff]144[/][#6b7280] functions[/]   [#3a3a3a]·[/]   "
+        f"  [#46c890]{n_sources}[/][#6b7280] free no-key sources[/]   [#3a3a3a]·[/]   "
+        f"[#5aa7ff]{n_funcs}[/][#6b7280] functions[/]   [#3a3a3a]·[/]   "
         f"[#6b7280]v{__version__}[/]   [#3a3a3a]·[/]   "
         f"[#6b7280]type [/][#e8e8e8]/help[/]"
     )
     console.print()
 
 
-_GROUP_COLOR = {
-    "Price": "#5aa7ff", "Compare": "#5aa7ff", "Company": "#5aa7ff",
-    "Country": "#46c890", "Crypto/DeFi": "#f4a13c", "Economy": "#d6b656",
-    "Signals": "#b48ead", "Markets": "#46c890", "Find": "#9aa0a6",
-}
+def _help_all_funcs(kind: str) -> list[str]:
+    """All functions for a kind: verbs + numeric field shortcuts merged."""
+    from src.capabilities import functions_for
+    from src.data.metrics import metric_aliases
+    return sorted(set(functions_for(kind)) | set(metric_aliases(kind)))
+
+
+def _help_instruments(kind: str) -> list[str]:
+    """Canonical instrument tokens for a kind (empty for open-ended categories)."""
+    if kind in ("equity", "etf", "crypto", "topic"):
+        return []
+    if kind in ("index", "commodity", "fx"):
+        from src.verbs import SPECIAL_SUBJECTS
+        return [s for s, v in SPECIAL_SUBJECTS.items() if v[2] == kind]
+    if kind == "country":
+        from src.data.worldbank import COUNTRIES
+        seen, out = set(), []
+        for tok, (iso, _) in COUNTRIES.items():
+            if iso not in seen:
+                seen.add(iso); out.append(tok)
+        return out
+    if kind == "chain":
+        from src.data.defillama import CHAINS
+        return list(CHAINS)
+    if kind == "protocol":
+        from src.data.defillama import PROTOCOLS
+        return list(PROTOCOLS)
+    if kind == "stablecoin":
+        from src.data.defillama import STABLECOINS
+        return list(STABLECOINS)
+    if kind == "macro":
+        from src.data.macro import MACRO_SERIES
+        return list(MACRO_SERIES)
+    if kind == "exchange":
+        from src.data.calendars import EXCHANGES
+        return list(EXCHANGES)
+    return []
+
+
+def print_load_panel(subj) -> None:
+    """Compact passport card shown when any instrument is loaded."""
+    accent = KIND_COLORS.get(subj.kind, C)
+    priority = _PRIORITY_FUNCS.get(subj.kind, [])
+
+    from src.capabilities import functions_for
+    from src.data.metrics import metric_aliases
+    valid = set(functions_for(subj.kind)) | set(metric_aliases(subj.kind))
+    fns = [f for f in priority if f in valid][:8]
+    total = len(valid)
+
+    fn_line = "  ".join(f"[bold {accent}]{f}[/]" for f in fns)
+    hint = f"  [#555555]→ /help {subj.kind}  ({total} total)[/]" if total > len(fns) else ""
+
+    # Build label: name + exchange/kind tag
+    name_part = f"[#9aa0a6]{subj.name}[/]  " if subj.name else ""
+    tag = subj.exchange or subj.kind
+    tag_line = f"{name_part}[{accent}]{tag}[/]"
+
+    body = Text.from_markup(f"  {tag_line}\n\n  {fn_line}{hint}")
+    console.print()
+    console.print(Panel(
+        body,
+        title=f"[bold {accent}] ● {subj.symbol} [/]",
+        title_align="left",
+        border_style=accent,
+        box=box.ROUNDED,
+        padding=(0, 1),
+        expand=False,
+    ))
+    console.print()
+
+
+def _fuzzy_instrument_search(query: str) -> list[tuple[str, str, str]]:
+    """Return (symbol, kind, name) for instruments whose symbol or name contains query."""
+    from src.verbs import SPECIAL_SUBJECTS
+    from src.data.worldbank import COUNTRIES
+    from src.data.macro import MACRO_SERIES
+    from src.data.defillama import CHAINS, PROTOCOLS, STABLECOINS
+    from src.data.calendars import EXCHANGES
+
+    q_up = query.upper()
+    q_lo = query.lower()
+    out, seen = [], set()
+
+    def _check(sym, kind, name):
+        if sym not in seen and (q_up in sym or q_lo in name.lower()):
+            seen.add(sym)
+            out.append((sym, kind, name))
+
+    for sym, (_, name, kind) in SPECIAL_SUBJECTS.items():
+        _check(sym, kind, name)
+    for sym, (_, name) in COUNTRIES.items():
+        _check(sym, "country", name)
+    for sym, (_, name, _) in MACRO_SERIES.items():
+        _check(sym, "macro", name)
+    for sym, (_, name) in CHAINS.items():
+        _check(sym, "chain", name)
+    for sym, (_, name) in PROTOCOLS.items():
+        _check(sym, "protocol", name)
+    for sym, (_, name) in STABLECOINS.items():
+        _check(sym, "stablecoin", name)
+    for sym, (_, name, _) in EXCHANGES.items():
+        _check(sym, "exchange", name)
+
+    return out[:12]
+
+
+def _resolve_help_kind(symbol: str) -> str | None:
+    """Return the category kind for a symbol without a network call."""
+    from src.verbs import SPECIAL_SUBJECTS
+    from src.data.worldbank import COUNTRIES
+    from src.data.defillama import CHAINS, PROTOCOLS, STABLECOINS
+    from src.data.macro import MACRO_SERIES
+    from src.data.calendars import EXCHANGES
+    if symbol in SPECIAL_SUBJECTS:
+        return SPECIAL_SUBJECTS[symbol][2]
+    if symbol in COUNTRIES:
+        return "country"
+    if symbol in CHAINS:
+        return "chain"
+    if symbol in PROTOCOLS:
+        return "protocol"
+    if symbol in STABLECOINS:
+        return "stablecoin"
+    if symbol in MACRO_SERIES:
+        return "macro"
+    if symbol in EXCHANGES:
+        return "exchange"
+    from src.data.symbols import looks_like_ticker
+    if looks_like_ticker(symbol):
+        return "equity"
+    return None
+
 
 
 def print_help(topic: str = None):
-    topic = (topic or "").strip().lower()
-    groups = {g.lower(): (g, rows) for g, rows in _FUNCTIONS}
+    """
+    /help                → overview (or loaded instrument's functions if one is active)
+    /help <category>     → instruments in that category
+    /help <symbol>       → all functions for that instrument
+    """
+    topic = (topic or "").strip()
+    if topic.lower().startswith("topic:"):
+        topic = "topic"
 
-    # Per-instrument help takes precedence over a same-named category (so `/help
-    # country` shows the full consistent function+metric set, not the short list).
-    _kinds = {"equity", "stock", "stocks", "etf", "country", "countries", "crypto",
-              "chain", "protocol", "stablecoin", "index", "commodity", "fx", "forex",
-              "macro", "exchange", "topic"}
+    top_up  = topic.upper()
+    top_low = topic.lower()
 
-    # Drill-down: `/help company`, `/help markets`, `/help targets`, `/help metrics`.
-    if topic in groups and topic not in _kinds:
-        g, rows = groups[topic]
-        accent = _GROUP_COLOR.get(g, C)
-        t = Table(box=None, show_header=False, padding=(0, 3, 0, 0))
-        t.add_column(style=f"bold {accent}", no_wrap=True)
-        t.add_column(style="#b4b4b4")
-        for cmd, desc in rows:
-            t.add_row(cmd, desc)
+    _KIND_ALIAS = {
+        "equity": "equity", "stock": "equity", "stocks": "equity", "equities": "equity",
+        "etf": "etf", "etfs": "etf",
+        "country": "country", "countries": "country",
+        "crypto": "crypto", "cryptocurrency": "crypto",
+        "chain": "chain", "chains": "chain",
+        "protocol": "protocol", "protocols": "protocol",
+        "stablecoin": "stablecoin", "stablecoins": "stablecoin",
+        "index": "index", "indices": "index", "indexes": "index",
+        "commodity": "commodity", "commodities": "commodity",
+        "fx": "fx", "forex": "fx",
+        "macro": "macro", "fred": "macro",
+        "exchange": "exchange", "exchanges": "exchange",
+        "topic": "topic", "topics": "topic",
+    }
+
+    # ── /help <category> → instruments in that category ─────────────────────
+    if top_low in _KIND_ALIAS:
+        kind        = _KIND_ALIAS[top_low]
+        accent      = _KIND_ACCENT.get(kind, C)
+        instruments = _help_instruments(kind)
+        _OPEN = {
+            "equity": ("83k+", "NVDA · AAPL · TSLA · GOOGL · MSFT · AMZN · META · JPM"),
+            "etf":    ("8k+",  "SPY · QQQ · IWM · GLD · XLF · ARKK · VTI · AGG"),
+            "crypto": ("15k+", "BTC · ETH · SOL · ADA · MATIC · AVAX · DOT · LINK"),
+            "topic":  ("∞",    'topic:lithium · topic:AI · topic:inflation · topic:"rate cuts"'),
+        }
+        parts: list = []
+        if instruments:
+            n = len(instruments)
+            title_str = f"[bold {accent}] {kind}  —  {n} [/]"
+            for i in range(0, len(instruments), 10):
+                row = instruments[i:i+10]
+                parts.append(Text.from_markup(
+                    "  " + "  ·  ".join(f"[bold {accent}]{t}[/]" for t in row)))
+        else:
+            count, ex = _OPEN.get(kind, ("", ""))
+            title_str = f"[bold {accent}] {kind}  —  {count} [/]"
+            parts.append(Text.from_markup(f"  [#c0c4cc]{ex}[/]"))
+        parts.append(Text(""))
+        parts.append(Text.from_markup(f"  [#808080]/help <symbol>  to see functions[/]"))
         console.print()
-        console.print(Panel(t, title=f"[bold {accent}] {g} [/]", title_align="left",
+        console.print(Panel(Group(*parts), title=title_str, title_align="left",
                             border_style=accent, box=box.ROUNDED, padding=(1, 2), expand=False))
         console.print()
         return
-    if topic in ("target", "targets"):
-        t = Table(box=None, show_header=False, padding=(0, 3, 0, 0))
-        t.add_column(style="bold #e8e8e8", no_wrap=True)
-        t.add_column(style="#b4b4b4")
-        for cmd, desc in _TARGETS:
-            t.add_row(cmd, desc)
+
+    # ── /help <symbol> or context-aware (/help with instrument loaded) ────────
+    if topic:
+        kind = _resolve_help_kind(top_up)
+        sym  = top_up
+        if not kind:
+            if len(topic) >= 2:
+                matches = _fuzzy_instrument_search(topic)
+                if matches:
+                    rows_markup = []
+                    for s, mtype, name in matches:
+                        a = _KIND_ACCENT.get(mtype, "#9aa0a6")
+                        rows_markup.append(
+                            f"  [bold {a}]{s:<14}[/]  [{a}]{mtype:<12}[/]  [#c0c4cc]{name}[/]"
+                        )
+                    body = Text.from_markup(
+                        f"  [#9aa0a6]Matching [/][white]{topic}[/]\n\n"
+                        + "\n".join(rows_markup)
+                        + "\n\n  [#808080]/help <symbol>  for functions  ·  /help <category>  for list[/]"
+                    )
+                    console.print()
+                    console.print(Panel(body, title=f"[bold {C}] find: {topic} [/]",
+                                        title_align="left", border_style=C,
+                                        box=box.ROUNDED, padding=(1, 2), expand=False))
+                    console.print()
+            return
+    else:
+        from src.context import ctx
+        if ctx.subjects:
+            kind = ctx.subjects[0].kind
+            sym  = ctx.subjects[0].symbol
+        else:
+            kind = None
+            sym  = ""
+
+    if kind:
+        accent = _KIND_ACCENT.get(kind, C)
+        from src.capabilities import functions_for as _ffor
+        valid_set = set(_ffor(kind))
+        n_fn = len(valid_set)
+
+        desc = ""
+        from src.verbs import SPECIAL_SUBJECTS
+        from src.data.worldbank import COUNTRIES
+        from src.data.macro import MACRO_SERIES
+        if sym in SPECIAL_SUBJECTS:
+            desc = SPECIAL_SUBJECTS[sym][1]
+        elif sym in COUNTRIES:
+            desc = COUNTRIES[sym][1]
+        elif sym in MACRO_SERIES:
+            desc = MACRO_SERIES[sym][1]
+
+        parts: list = []
+        if desc:
+            parts.append(Text.from_markup(f"  [#c0c4cc]{desc}[/]"))
+            parts.append(Text(""))
+
+        groups = _FUNC_GROUPS.get(kind)
+        if groups:
+            for group_name, group_fns in groups:
+                valid_fns = [f for f in group_fns if f in valid_set]
+                if not valid_fns:
+                    continue
+                fn_str = "  ".join(f"[bold {accent}]{f}[/]" for f in valid_fns)
+                parts.append(Text.from_markup(f"  [#9aa0a6]{group_name:<14}[/]  {fn_str}"))
+        else:
+            funcs = sorted(valid_set)
+            for i in range(0, len(funcs), 8):
+                row = funcs[i:i+8]
+                parts.append(Text.from_markup(
+                    "  " + "  ".join(f"[bold {accent}]{f}[/]" for f in row)))
+
         console.print()
-        console.print(Panel(t, title="[bold #e8e8e8] Targets — what you can load [/]",
-                            title_align="left", border_style="#5aa7ff", box=box.ROUNDED,
-                            padding=(1, 2), expand=False))
+        console.print(Panel(
+            Group(*parts),
+            title=f"[bold {accent}] {sym}  —  {n_fn} functions [/]",
+            title_align="left", border_style=accent,
+            box=box.ROUNDED, padding=(1, 2), expand=False,
+        ))
         console.print()
-        return
-    # Per-instrument help: `/help equity`, `/help country`, `/help crypto`, …
-    _KIND_ALIAS = {"equity": "equity", "stock": "equity", "stocks": "equity", "etf": "etf",
-                   "country": "country", "countries": "country", "crypto": "crypto",
-                   "chain": "chain", "protocol": "protocol", "stablecoin": "stablecoin",
-                   "index": "index", "commodity": "commodity", "fx": "fx", "forex": "fx",
-                   "macro": "macro", "exchange": "exchange", "topic": "topic"}
-    if topic in _KIND_ALIAS:
-        from src.capabilities import functions_for
-        from src.data.metrics import metric_aliases
-        kind = _KIND_ALIAS[topic]
-        funcs = functions_for(kind)
-        ms = metric_aliases(kind)
-        accent = {"equity": "#5aa7ff", "etf": "#5aa7ff", "country": "#46c890",
-                  "crypto": "#f4a13c", "chain": "#f4a13c", "protocol": "#f4a13c",
-                  "stablecoin": "#f4a13c", "index": "#b48ead", "commodity": "#d6b656",
-                  "fx": "#4fc1c4"}.get(kind, C)
-        lines = [f"  [#b4b4b4]Functions that work on every {kind} target:[/]\n",
-                 "  " + "  ".join(f"[white]{f}[/]" for f in funcs)]
-        if ms:
-            lines += [f"\n  [#b4b4b4]Plus {len(ms)} metric fields (type any after the target):[/]\n",
-                      "  " + "  ".join(f"[#9aa0a6]{m}[/]" for m in ms[:40]) + (" …" if len(ms) > 40 else "")]
-        console.print()
-        console.print(Panel(Text.from_markup("\n".join(lines)),
-                            title=f"[bold {accent}] {kind.title()} — what you can run [/]",
-                            title_align="left", border_style=accent, box=box.ROUNDED,
-                            padding=(1, 2), expand=False))
-        console.print()
-        return
-    if topic in ("board", "boards", "global"):
-        from src.capabilities import BOARDS
-        from src.completion import VERB_META
-        t = Table(box=None, show_header=False, padding=(0, 3, 0, 0))
-        t.add_column(style="bold #e8e8e8", no_wrap=True)
-        t.add_column(style="#b4b4b4")
-        for b in sorted(BOARDS):
-            t.add_row(b, VERB_META.get(b, ""))
-        console.print()
-        console.print(Panel(t, title="[bold #e07060] Boards — standalone dashboards (no target) [/]",
-                            title_align="left", border_style="#e07060", box=box.ROUNDED,
-                            padding=(1, 2), expand=False))
-        console.print()
-        return
-    if topic in ("metric", "metrics"):
-        console.print(Panel(Text.from_markup(
-            "  Every [bold #5aa7ff]equity[/] exposes ~65 fields; every [bold #46c890]country[/] ~40 indicators —\n"
-            "  the same vocabulary on any target of that kind.\n\n"
-            "  [white]NVDA pe revenue netmargin fcf roe[/]   [#9aa0a6]→ one combined card[/]\n"
-            "  [white]NVDA metrics[/]                        [#9aa0a6]→ the full dump[/]\n"
-            "  [white]INDIA growth gdppc inflation[/]        [#9aa0a6]→ same idea, any country[/]\n"
-            "  [white]NVDA vs AMD pe[/]                       [#9aa0a6]→ a field across the set[/]"),
-            title="[bold #d8b66a] Metrics — deep, consistent fields [/]", title_align="left",
-            border_style="#d8b66a", box=box.ROUNDED, padding=(1, 2), expand=False))
         return
 
-    # Overview.
+    # ── Overview (/help with nothing loaded) ─────────────────────────────────
     from src.capabilities import functions_for
-    from src.data.metrics import metric_aliases
+
     grammar = Text.from_markup(
-        "  [#9aa0a6]Load an[/] [bold #e8e8e8]INSTRUMENT[/][#9aa0a6], run[/] [bold #e8e8e8]FUNCTIONS[/] "
-        "[#9aa0a6]& metric fields, left to right. Every function works[/]\n"
-        "  [#9aa0a6]for[/] [bold #e8e8e8]every[/] [#9aa0a6]instrument in its category — so it's the same on[/] "
-        "[white]NVDA[/] [#9aa0a6]as[/] [white]AAPL[/][#9aa0a6], [/][white]US[/] [#9aa0a6]as[/] [white]INDIA[/][#9aa0a6].[/]\n\n"
-        "    [white]NVDA[/] [#9aa0a6]price financials pe revenue roe[/]     [#b4b4b4]a stock + fields[/]\n"
-        "    [white]NVDA vs AMD[/] [#9aa0a6]compare corr[/]                 [#b4b4b4]a set[/]\n"
-        "    [white]INDIA[/] [#9aa0a6]gdp inflation corruption metrics[/]   [#b4b4b4]any country[/]\n"
-        "    [white]BTC[/] [#9aa0a6]price cex funding governance[/]         [#b4b4b4]crypto[/]\n"
-        "    [white]coins[/][#9aa0a6] · [/][white]yields[/][#9aa0a6] · [/][white]auctions[/]               [#b4b4b4]standalone boards (no target)[/]"
+        "  [#c0c4cc]Load an[/] [bold #e8e8e8]INSTRUMENT[/] [#c0c4cc]·  run[/] "
+        "[bold #e8e8e8]FUNCTIONS[/] [#c0c4cc]left to right.[/]\n\n"
+        "    [white]NVDA[/]  [#c0c4cc]price financials pe revenue roe[/]  [#9aa0a6]equity[/]"
     )
-    _INSTR = [("Equity", "equity", "#5aa7ff"), ("Country", "country", "#46c890"),
-              ("Crypto", "crypto", "#f4a13c"), ("Index", "index", "#b48ead"),
-              ("Commodity", "commodity", "#d6b656"), ("FX", "fx", "#4fc1c4")]
-    cat = Table(box=None, show_header=False, padding=(0, 2, 0, 0))
-    cat.add_column(no_wrap=True)
-    cat.add_column(style="#b4b4b4")
-    for label, kind, color in _INSTR:
-        nf = len(functions_for(kind))
-        nm = len(metric_aliases(kind))
-        extra = f" + {nm} fields" if nm else ""
-        cat.add_row(f"[bold {color}]{label}[/]",
-                    f"{nf} functions{extra}  ·  /help {kind}")
+
+    cat_table = Table(box=None, show_header=False, padding=(0, 1, 0, 0))
+    cat_table.add_column(no_wrap=True, min_width=12)
+    cat_table.add_column(no_wrap=True, min_width=6)
+    cat_table.add_column(style="#9aa0a6", no_wrap=True, min_width=6)
+    cat_table.add_column(style="#9aa0a6")
+
+    for kind, accent, sym_count, examples in _CATEGORIES:
+        n_fn = len(functions_for(kind))
+        cat_table.add_row(
+            f"[bold {accent}]{kind}[/]",
+            f"[#c0c4cc]{n_fn} fn[/]",
+            sym_count,
+            examples,
+        )
 
     body = Group(
         grammar, Text(""),
-        Rule("[#5a5a5a]instruments — type /help <instrument> for its full, consistent set[/]", style="#5a5a5a"),
-        Text(""), cat, Text(""),
-        Rule(style="#5a5a5a"),
+        Rule("[#6b7280]categories — /help <category>[/]", style="#3a3a3a"),
+        Text(""),
+        cat_table,
+        Text(""),
+        Rule(style="#3a3a3a"),
         Text.from_markup(
-            "  [bold #e07060]boards[/]    [#b4b4b4]/help boards — standalone dashboards (coins, yields, auctions …)[/]\n"
-            "  [bold #d8b66a]metrics[/]   [#b4b4b4]/help metrics — deep per-instrument fields[/]\n"
-            "  [bold #e07060]/ask[/]      [#b4b4b4]\"question\" — Fin-R1 reasons over the panels on screen[/]\n"
-            "  [#9aa0a6]system[/]    [#b4b4b4]/help targets · /clear · /login · /exit[/]"),
+            "  [#c0c4cc]/help <symbol>[/]   [#9aa0a6]functions for that instrument[/]\n"
+            "  [#c0c4cc]/clear  /exit[/]"),
     )
     console.print()
     console.print(Panel(body, title=f"[bold {C}] FinR1 Terminal [/]", title_align="left",
-                        subtitle="[#7a7a7a] load a TARGET · run FUNCTIONS [/]",
+                        subtitle="[#6b7280] load an INSTRUMENT · run FUNCTIONS [/]",
                         border_style=C, box=box.ROUNDED, padding=(1, 2), expand=False))
     console.print()
-
-
-def print_agent_step(tool: str, args: dict):
-    """Dim, transparent line showing exactly which connector the agent is pulling."""
-    detail = " ".join(f"{v}" for v in args.values() if str(v).strip())
-    label  = f"{tool} {detail}".strip()
-    console.print(f"  [#555555]↳ pulling[/] [#e07060]{label}[/]")
-
-
-def print_agent_answer(text: str):
-    """Render the agent's grounded answer as timestamped markdown."""
-    ts = datetime.now().strftime("%H:%M:%S")
-    console.print(Panel(
-        Markdown(text or "(no answer)"),
-        title=f"[bold {C}] Fin-R1 [/]",
-        subtitle=f"[#333333] {ts} [/]",
-        border_style=C,
-        box=box.ROUNDED,
-        padding=(1, 2),
-    ))
-
-
-def print_usage(stats):
-    """Compact status line after an `ai` call: tokens used + context window fill."""
-    from src.context import MODEL
-    last  = stats.last_total
-    pct   = stats.context_pct
-    win_k = MODEL["context"] / 1000
-    bar_w = 16
-    fill  = int(pct / 100 * bar_w)
-    bar   = "█" * fill + "░" * (bar_w - fill)
-    color = "#00c853" if pct < 60 else "#ffab00" if pct < 85 else "#ff1744"
-    console.print(
-        f"  [#555555]Fin-R1[/] [#777777]·[/] "
-        f"[#555555]{stats.last_prompt_tokens:,} in + {stats.last_completion_tokens:,} out "
-        f"= {last:,} tok[/]  [{color}]{bar}[/] [#555555]{pct:.0f}% of {win_k:.0f}k ctx[/]  "
-        f"[#777777]·[/] [#555555]{stats.ai_calls} call(s), {stats.total_tokens:,} tok this session[/]\n"
-    )
 
 
 def print_panel(content, title: str = "", border: str = None, kind: str = None):

@@ -511,43 +511,6 @@ def get_options(ticker: str) -> str:
         return f"Could not fetch options for {ticker}: {e}"
 
 
-def perf_table(title: str, items: list, source: str = "") -> str:
-    """Sorted performance table (last · 1D · 1M) for [(label, yf_symbol)]."""
-    rows = []
-    for label, sym in items:
-        try:
-            t = yf.Ticker(sym)
-            fast = t.fast_info
-            price, prev = fast.last_price, fast.previous_close
-            day = (price - prev) / prev * 100 if prev else None
-            hist = t.history(period="1mo")["Close"].dropna()
-            mo = (hist.iloc[-1] / hist.iloc[0] - 1) * 100 if len(hist) > 1 else None
-            rows.append((label, price, day, mo))
-        except Exception:
-            rows.append((label, None, None, None))
-    rows.sort(key=lambda r: (r[2] if r[2] is not None else -99), reverse=True)
-    out = [title] + ([source] if source else []) + [
-        "", f"  {'':<18}{'Last':>12}{'1D':>9}{'1M':>9}", "  " + "─" * 48]
-    for label, price, day, mo in rows:
-        p = f"{price:,.2f}" if price is not None else "—"
-        d = f"{day:+.2f}%" if day is not None else "—"
-        m = f"{mo:+.1f}%" if mo is not None else "—"
-        out.append(f"  {label[:18]:<18}{p:>12}{d:>9}{m:>9}")
-    return "\n".join(out)
-
-
-_SECTOR_ETFS = [
-    ("Technology (XLK)", "XLK"), ("Financials (XLF)", "XLF"), ("Health Care (XLV)", "XLV"),
-    ("Cons Disc (XLY)", "XLY"), ("Comm Svcs (XLC)", "XLC"), ("Industrials (XLI)", "XLI"),
-    ("Cons Staples (XLP)", "XLP"), ("Energy (XLE)", "XLE"), ("Utilities (XLU)", "XLU"),
-    ("Materials (XLB)", "XLB"), ("Real Estate (XLRE)", "XLRE"),
-]
-
-
-def get_sectors() -> str:
-    return perf_table("US Sector Performance", _SECTOR_ETFS, "SPDR sector ETFs · 1-day / 1-month")
-
-
 def get_splits(ticker: str) -> str:
     """Stock split history."""
     try:

@@ -164,24 +164,6 @@ def wikidata_facts(name: str) -> str | None:
     return "\n".join(rows) if rows else None
 
 
-def sports_leagues() -> str:
-    """Major sports leagues — context for media-rights, betting, and apparel names.
-    Source: TheSportsDB."""
-    try:
-        j = get_json("https://www.thesportsdb.com/api/v1/json/3/all_leagues.php", timeout=12)
-        leagues = j.get("leagues") or []
-    except Exception as e:
-        return f"Could not fetch sports leagues: {e}"
-    major = [l for l in leagues if l.get("strSport") in
-             ("Soccer", "Basketball", "American Football", "Baseball", "Ice Hockey", "Motorsport")]
-    out = ["Major Sports Leagues", "Source: TheSportsDB", "",
-           f"  {'League':<34}Sport", "  " + "─" * 50]
-    for l in major[:18]:
-        out.append(f"  {str(l.get('strLeague',''))[:33]:<34}{l.get('strSport','')}")
-    out += ["", "  Media rights, sponsorship & betting flows track these leagues."]
-    return "\n".join(out)
-
-
 def wikipedia_summary(title: str) -> str | None:
     """One-paragraph plain-text summary from Wikipedia, or None."""
     if not title:

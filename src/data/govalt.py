@@ -71,60 +71,6 @@ def lobbying(company: str) -> str:
 
 # ── congressional trade filings (House Clerk PTR) ─────────────────────────────
 
-def congress_trades(n: int = 15) -> str:
-    """Most recent Periodic Transaction Reports (stock trades) filed by US House
-    members. Source: House Clerk financial disclosures (public ZIP)."""
-    import zipfile
-    year = datetime.utcnow().year
-    rows = None
-    for yr in (year, year - 1):
-        try:
-            blob = get(f"https://disclosures-clerk.house.gov/public_disc/financial-pdfs/{yr}FD.ZIP",
-                       timeout=30).content
-            zf = zipfile.ZipFile(io.BytesIO(blob))
-            txt = zf.read([x for x in zf.namelist() if x.endswith(".txt")][0]).decode("utf-8", "replace")
-            rows = list(csv.DictReader(io.StringIO(txt), delimiter="\t"))
-            if rows:
-                break
-        except Exception:
-            continue
-    if not rows:
-        return "Could not fetch congressional disclosure filings right now."
-
-    ptr = [r for r in rows if (r.get("FilingType") or "").strip() == "P"]
-
-    def keyfn(r):
-        try:
-            return datetime.strptime(r.get("FilingDate", ""), "%m/%d/%Y")
-        except ValueError:
-            return datetime.min
-    ptr.sort(key=keyfn, reverse=True)
-    if not ptr:
-        return "No recent congressional transaction reports found."
-
-    out = [
-        "Congressional Stock Trades — Recent Disclosures",
-        "Source: U.S. House Clerk · Periodic Transaction Reports",
-        "",
-        f"  {'Filed':<12}{'Member':<28}State",
-        "  " + "─" * 50,
-    ]
-    seen = set()
-    for r in ptr:
-        name = f"{r.get('First','').strip()} {r.get('Last','').strip()}".strip()
-        key = (r.get("FilingDate"), name)
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(f"  {r.get('FilingDate',''):<12}{name[:27]:<28}{r.get('StateDst','')}")
-        if len(seen) >= n:
-            break
-    out += ["", "  Members must report trades within 45 days. Tickers are in the linked filings."]
-    return "\n".join(out)
-
-
-# ── short-sale volume (FINRA Reg-SHO) ─────────────────────────────────────────
-
 def short_volume(ticker: str) -> str:
     """Daily short-sale volume as a share of total volume — FINRA consolidated
     Reg-SHO files (off-exchange). A high, persistent ratio signals short pressure."""

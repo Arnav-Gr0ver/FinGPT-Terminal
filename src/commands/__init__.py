@@ -1,1 +1,0 @@
-"""FinR1 Terminal command handlers."""

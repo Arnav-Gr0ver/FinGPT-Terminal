@@ -9,7 +9,7 @@ One rule: a TARGET, then a pipeline of FUNCTIONS.
 
 A bare ticker mid-line switches the target; `vs`/`&`/`,` adds one. Per-target
 functions (price, financials, news…) run once for each loaded target; set-aware
-functions run once over the whole set. `/ask` is the one paid function.
+functions run once over the whole set.
 """
 
 import shlex
@@ -66,6 +66,7 @@ EACH = {
     "constituents": verbs.v_constituents,
     "carry":      verbs.v_carry,
     "weather":    verbs.v_weather,
+    "solar":      verbs.v_solar,
     "gtrends":    verbs.v_gtrends,
     "sentiment":  verbs.v_sentiment,
     "splits":     verbs.v_splits,
@@ -87,6 +88,7 @@ EACH = {
     "who":        verbs.v_who,
     "market":     verbs.v_market,
     "tvl":        verbs.v_tvl,
+    "fees":       verbs.v_fees,
     "supply":     verbs.v_supply,
     "trends":     verbs.v_trends,
     "risk":       verbs.v_risk,
@@ -100,79 +102,20 @@ SETV = {
     "spread":  verbs.v_spread,
 }
 
-# Subject-independent verbs: run with nothing (or anything) loaded.
+# Subject-independent verbs: run with nothing (or anything) loaded. Standalone
+# market/economy "boards" were removed — the terminal is purely instrument →
+# functions — so only session utilities and the two instrument-aware globals
+# (holidays → country, bigmac → fx) remain here.
 GLOBAL = {
-    "watch":     verbs.v_watch,
-    "hours":     verbs.v_hours,
-    "export":    verbs.v_export,
-    "yields":    verbs.v_yields,
-    "usdebt":    verbs.v_usdebt,
-    "refrates":  verbs.v_refrates,
-    "auctions":  verbs.v_auctions,
-    "budget":    verbs.v_budget,
-    "recession": verbs.v_recession,
-    "credit":    verbs.v_credit,
-    "housing":   verbs.v_housing,
-    "soma":      verbs.v_soma,
-    "stress":    verbs.v_stress,
-    "ipos":      verbs.v_ipos,
-    "holidays":  verbs.v_holidays,
-    "bigmac":    verbs.v_bigmac,
-    "fear":      verbs.v_fear,
-    "dominance": verbs.v_dominance,
-    "coins":     verbs.v_coins,
-    "trending":  verbs.v_trending,
-    "onchain":   verbs.v_onchain,
-    "pools":     verbs.v_pools,
-    "dexs":      verbs.v_dexs,
-    "fees":      verbs.v_fees,
-    "chains":    verbs.v_chains,
-    "hacks":     verbs.v_hacks,
-    "treasuries": verbs.v_treasuries,
-    "congress":  verbs.v_congress,
-    "disasters": verbs.v_disasters,
-    "politics":  verbs.v_politics,
-    "hazards":   verbs.v_hazards,
-    "flights":   verbs.v_flights,
-    "exchanges": verbs.v_exchanges,
-    "categories": verbs.v_categories,
-    "industrial": verbs.v_industrial,
-    "mining":    verbs.v_mining,
-    "permits":   verbs.v_permits,
-    "claims":    verbs.v_claims,
-    "confidence": verbs.v_confidence,
-    "freight":   verbs.v_freight,
-    "shortages": verbs.v_shortages,
-    "water":     verbs.v_water,
-    "airports":  verbs.v_airports,
-    "alerts":    verbs.v_alerts,
-    "travel":    verbs.v_travel,
-    "ecb":       verbs.v_ecb,
-    "eurostat":  verbs.v_eurostat,
-    "spaceweather": verbs.v_spaceweather,
-    "hurricanes": verbs.v_hurricanes,
-    "tides":     verbs.v_tides,
-    "gridcarbon": verbs.v_gridcarbon,
-    "volcanoes": verbs.v_volcanoes,
-    "buoys":     verbs.v_buoys,
-    "neo":       verbs.v_neo,
-    "citypermits": verbs.v_citypermits,
-    "disease":   verbs.v_disease,
-    "medicare":  verbs.v_medicare,
-    "sports":    verbs.v_sports,
-    "btcchain":  verbs.v_btcchain,
-    "ethsupply": verbs.v_ethsupply,
-    "kfutures":  verbs.v_kfutures,
-    "sectors":   verbs.v_sectors,
-    "indices":   verbs.v_indices,
-    "commodities": verbs.v_commodities,
-    "forex":     verbs.v_forex,
-    "protocols": verbs.v_protocols,
-    "stablecoins": verbs.v_stablecoins,
+    "watch":    verbs.v_watch,
+    "hours":    verbs.v_hours,
+    "export":   verbs.v_export,
+    "holidays": verbs.v_holidays,
+    "bigmac":   verbs.v_bigmac,
 }
 
 # Functions that take their own arguments (handled in _parse / _execute).
-ARG_VERBS = {"chart", "compare", "screen", "convert", "predictions", "forecasts"}
+ARG_VERBS = {"chart", "compare", "screen", "convert", "find"}
 
 VERBS = set(EACH) | set(SETV) | set(GLOBAL) | ARG_VERBS
 
@@ -192,9 +135,6 @@ def route(raw: str):
     if low in ("/help", "/h", "/?") or low.startswith(("/help ", "/h ")):
         parts = raw.split(None, 1)
         print_help(parts[1] if len(parts) > 1 else None); return
-    if low == "/login":
-        from src.auth import run_login; run_login(); return
-
     try:
         tokens = shlex.split(raw)
     except ValueError:
@@ -230,16 +170,6 @@ def _parse(tokens: list[str]):
     while i < len(tokens):
         tok = tokens[i]
         low = tok.lower()
-
-        # `/ask` — the one in-chain system command (slash required).
-        if low in ("/ask", "/ai"):
-            i += 1
-            hist = "1"
-            if i < len(tokens) and (tokens[i].isdigit() or tokens[i].lower() == "all"):
-                hist = tokens[i].lower(); i += 1
-            question = " ".join(tokens[i:]); i = len(tokens)
-            steps.append(("ask", (hist, question)))
-            continue
 
         if low in CONNECTORS:
             i += 1
@@ -278,12 +208,11 @@ def _parse(tokens: list[str]):
             while i < len(tokens) and tokens[i].lower() not in VERBS:
                 args.append(tokens[i]); i += 1
             steps.append(("convert", args))
-        elif low in ("predictions", "forecasts"):
+        elif low == "find":
             args = []
-            while (i < len(tokens) and tokens[i].lower() not in VERBS
-                   and tokens[i].lower() not in CONNECTORS):
+            while i < len(tokens) and tokens[i].lower() not in VERBS:
                 args.append(tokens[i]); i += 1
-            steps.append((low, args))
+            steps.append(("find", args))
         else:
             steps.append((low, None))
     return steps
@@ -340,17 +269,9 @@ def _execute(steps):
             verbs.v_screen(arg); prev_verb = name; continue
         if name == "convert":
             verbs.v_convert(arg); prev_verb = name; continue
-        if name == "predictions":
-            verbs.v_predictions(arg); prev_verb = name; continue
-        if name == "forecasts":
-            verbs.v_forecasts(arg); prev_verb = name; continue
+        if name == "find":
+            verbs.v_find(arg); prev_verb = name; continue
         if name in GLOBAL:
-            # A US-only board becomes the loaded country's own indicator where one
-            # exists — so `INDIA industrial` shows India, not the US, consistently.
-            from src.data.metrics import COUNTRY_METRICS
-            country = next((s for s in active if s.kind == "country"), None)
-            if country is not None and name in COUNTRY_METRICS:
-                _run_metrics([country], [name]); prev_verb = name; continue
             if active and not _func_applies(name, {s.kind for s in active}):
                 _reject(name, active); prev_verb = name; continue
             GLOBAL[name](active); prev_verb = name; continue
@@ -362,7 +283,7 @@ def _execute(steps):
 
         # Enforce target-awareness: a function only runs if it fits the loaded kind,
         # so every target of a kind exposes exactly the same consistent set.
-        if name != "ask" and not _func_applies(name, {s.kind for s in active}):
+        if not _func_applies(name, {s.kind for s in active}):
             _reject(name, active); prev_verb = name; continue
 
         if name == "compare":
@@ -374,8 +295,6 @@ def _execute(steps):
             verbs.v_compare(active)
         elif name == "chart":
             verbs.v_chart(active, arg, prev_verb)
-        elif name == "ask":
-            _ask(arg, active)
         elif name in SETV:
             SETV[name](active)
         else:                                   # per-subject verb
@@ -423,18 +342,3 @@ def _run_metrics(active, aliases):
         print_panel(escape(body), title=title)
 
 
-def _ask(arg, active):
-    """The `/ask` function (the ai layer, Fin-R1). Reasons over the data already shown
-    this session — the user picks how much via the count: `ask`, `ask 5 …`,
-    `ask all …`."""
-    hist, question = arg
-    if not question:
-        print_error('/ask needs a question — e.g. /ask "is the margin dip structural?"\n'
-                    '  Add session context: /ask 5 "…" (last 5) or /ask all "…".')
-        return
-    if active:
-        ctx.set_subjects(active)        # the model shares the whole loaded set
-    context_block = ctx.history_context(hist)
-    query = (context_block + "\n\nQUESTION: " + question) if context_block else question
-    from src.agent import run_agent
-    run_agent(query, ctx, deep=False)

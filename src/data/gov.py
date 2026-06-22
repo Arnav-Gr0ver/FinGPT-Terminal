@@ -291,36 +291,6 @@ def _efts(params: dict):
     return r.json().get("hits", {}).get("hits", [])
 
 
-def sec_activists(company: str, n: int = 12) -> str:
-    """Recent activist / large-stake filings (SC 13D / 13G) naming the company.
-    Source: SEC EDGAR full-text search."""
-    import re
-    try:
-        hits = _efts({"q": f'"{company}"', "forms": "SC 13D,SC 13G,SC 13D/A,SC 13G/A"})
-    except Exception as e:
-        return f"Could not fetch 13D/G filings: {e}"
-    core = company.lower().split()[0]                 # e.g. "apple"
-    rows = []
-    for h in hits:
-        s = h.get("_source", {})
-        filer = re.sub(r"\s*\(.*", "", (s.get("display_names") or ["?"])[0]).strip()
-        if core in filer.lower():                      # drop the company's own filings
-            continue
-        rows.append((s.get("file_date", "")[:10], s.get("file_type", "")[:9], filer[:34]))
-        if len(rows) >= n:
-            break
-    if not rows:
-        return (f"No third-party 13D/13G stake filings found naming {company}.\n"
-                "  (Holders' filings index the subject by name; coverage varies.)")
-    out = [f"Activist & >5% Stake Filings — {company}",
-           "Source: SEC EDGAR · Schedule 13D / 13G (filed by holders)", "",
-           f"  {'Filed':<12}{'Form':<10}Filer", "  " + "─" * 56]
-    for date, form, filer in rows:
-        out.append(f"  {date:<12}{form:<10}{filer}")
-    out += ["", "  13D = activist intent · 13G = passive >5% holder."]
-    return "\n".join(out)
-
-
 def sec_mentions(company: str, n: int = 12) -> str:
     """Most recent SEC filings (any form) that mention the company in full text.
     Source: SEC EDGAR full-text search."""
@@ -338,56 +308,6 @@ def sec_mentions(company: str, n: int = 12) -> str:
         s = h.get("_source", {})
         filer = re.sub(r"\s*\(.*", "", (s.get("display_names") or ["?"])[0]).strip()[:34]
         out.append(f"  {s.get('file_date','')[:10]:<12}{s.get('file_type','')[:9]:<10}{filer}")
-    return "\n".join(out)
-
-
-def recent_ipos(n: int = 15) -> str:
-    """The IPO pipeline — most recent S-1 registration statements filed with the
-    SEC (companies preparing to go public). Source: SEC EDGAR full-text search."""
-    import re
-    try:
-        r = requests.get("https://efts.sec.gov/LATEST/search-index",
-                         params={"forms": "S-1", "dateRange": "custom",
-                                 "startdt": (datetime.utcnow() - timedelta(days=120)).strftime("%Y-%m-%d"),
-                                 "enddt": datetime.utcnow().strftime("%Y-%m-%d")},
-                         headers=HEADERS, timeout=15)
-        r.raise_for_status()
-        hits = r.json().get("hits", {}).get("hits", [])
-    except Exception as e:
-        return f"Could not fetch the IPO pipeline: {e}"
-    if not hits:
-        return "No recent S-1 filings found."
-
-    seen, rows = set(), []
-    for h in hits:
-        s = h.get("_source", {})
-        names = s.get("display_names") or []
-        if not names:
-            continue
-        raw = names[0]
-        ticker = ""
-        m = re.search(r"\(([A-Z]{1,6})\)", raw)
-        if m:
-            ticker = m.group(1)
-        company = re.sub(r"\s*\(.*", "", raw).strip()[:34]
-        key = company.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        rows.append((s.get("file_date", "")[:10], company, ticker, s.get("file_type", "S-1")))
-        if len(rows) >= n:
-            break
-
-    out = [
-        "IPO Pipeline — Recent S-1 Registrations",
-        "Source: SEC EDGAR · companies filing to go public",
-        "",
-        f"  {'Filed':<12}{'Company':<36}{'Ticker':<8}Form",
-        "  " + "─" * 64,
-    ]
-    for date, company, ticker, form in rows:
-        out.append(f"  {date:<12}{company:<36}{ticker or '—':<8}{form}")
-    out += ["", "  S-1/A = amended registration.  Load any ticker to research it."]
     return "\n".join(out)
 
 
