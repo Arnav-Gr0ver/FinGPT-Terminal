@@ -18,9 +18,10 @@ dependencies = [
     "requests>=2.31.0",
     "lxml>=4.9.0",
     "pandas>=2.0.0",
-    "yahooquery>=2.3.0",        
-    "exchange_calendars>=4.5",  
-    "pytrends>=4.9.0",          
+    "yahooquery>=2.3.0",
+    "exchange_calendars>=4.5",
+    "pytrends>=4.9.0",
+    "pycountry>=22.3.5",
 ]
 
 [project.scripts]
