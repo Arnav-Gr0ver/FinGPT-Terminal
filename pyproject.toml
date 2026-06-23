@@ -1,11 +1,11 @@
 [build-system]
-requires      = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+requires      = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name            = "finr1-terminal"
 version         = "0.1.0"
-description     = "A financial terminal driven by one grammar: subject, then verbs"
+description     = "The analyst in your terminal"
 readme          = "README.md"
 requires-python = ">=3.10"
 license         = { text = "MIT" }
@@ -18,9 +18,9 @@ dependencies = [
     "requests>=2.31.0",
     "lxml>=4.9.0",
     "pandas>=2.0.0",
-    "yahooquery>=2.3.0",        # peers (Yahoo recommendation graph)
-    "exchange_calendars>=4.5",  # exchange target — real trading sessions
-    "pytrends>=4.9.0",          # gtrends (Google search interest)
+    "yahooquery>=2.3.0",        
+    "exchange_calendars>=4.5",  
+    "pytrends>=4.9.0",          
 ]
 
 [project.scripts]
@@ -31,5 +31,5 @@ where   = ["."]
 include = ["src*"]
 
 [project.urls]
-Homepage   = "https://fingpt.ai"
-Repository = "https://github.com/yourname/fingpt-terminal"
+Homepage   = "https://finterminal.framer.website/"
+Repository = "https://github.com/Arnav-Gr0ver/FinR1-Terminal"

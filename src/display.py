@@ -679,13 +679,8 @@ def print_help(topic: str = None):
                     console.print()
             return
     else:
-        from src.context import ctx
-        if ctx.subjects:
-            kind = ctx.subjects[0].kind
-            sym  = ctx.subjects[0].symbol
-        else:
-            kind = None
-            sym  = ""
+        kind = None
+        sym  = ""
 
     if kind:
         accent = _KIND_ACCENT.get(kind, C)
